@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from routers import auth, tasks
 
 app = FastAPI()
 
@@ -17,3 +18,6 @@ def home():
 @app.get("/api/message")
 def get_message():
     return {"message": "Hello from FastAPI 🚀"}
+
+app.include_router(auth.router)
+app.include_router(tasks.router)
