@@ -23,7 +23,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
-      const res = await fetch(`http://localhost:8000${endpoint}`, {
+      const res = await fetch(`http://localhost:8001${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
@@ -36,9 +36,10 @@ export default function LoginPage() {
         return;
       }
 
-      // TODO: save JWT token to localStorage once backend returns one
-      // localStorage.setItem("token", data.token);
-      navigate("/");
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("username", data.username);
+    navigate("/");
+
     } catch {
       setError("Could not reach the server. Is the backend running?");
     } finally {
