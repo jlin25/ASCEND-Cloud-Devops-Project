@@ -22,6 +22,7 @@ class JobQueue:
             QueueUrl=self.queue_url,
             MaxNumberOfMessages=10,
             WaitTimeSeconds=20,
+            AttributeNames=["ApproximateReceiveCount"],
         )
         return resp.get("Messages", [])  # empty list if nothing's there
 

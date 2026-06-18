@@ -1,5 +1,5 @@
-from pydantic import BaseModel, TypeAdapter
-from typing import Literal
+from pydantic import BaseModel, Field, TypeAdapter
+from typing import Literal, Annotated
 
 
 class TranscodeJob(BaseModel):
@@ -22,6 +22,8 @@ class TrimJob(BaseModel):
     end_seconds: float
 
 
-type JobRequest = TranscodeJob | TrimJob | ExtractAudioJob
-
+type JobRequest = Annotated[
+    TranscodeJob | TrimJob | ExtractAudioJob,
+    Field(discriminator="type"),
+]
 job_adapter = TypeAdapter(JobRequest)
