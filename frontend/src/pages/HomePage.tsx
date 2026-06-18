@@ -38,7 +38,7 @@ export default function HomePage() {
             Tutorial
           </button>
           <button className="nav-link-btn">Docs</button>
-          <button className="nav-cta">Get Started</button>
+          <button className="nav-cta" onClick={() => navigate("/login")}>Get Started</button>
         </div>
       </nav>
 
