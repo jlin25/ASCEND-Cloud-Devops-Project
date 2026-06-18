@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Terraform
+#   tfstate contains resource ids AND secrets (e.g. the IAM secret key) — never commit.
+#   For a team you'd use a remote backend (S3 + DynamoDB lock) instead.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+*.tfvars
+!example.tfvars
