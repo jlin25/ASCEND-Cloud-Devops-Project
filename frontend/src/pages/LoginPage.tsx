@@ -38,7 +38,7 @@ export default function LoginPage() {
 
     localStorage.setItem("token", data.token);
     localStorage.setItem("username", data.username);
-    navigate("/");
+    navigate("/dashboard");
 
     } catch {
       setError("Could not reach the server. Is the backend running?");
