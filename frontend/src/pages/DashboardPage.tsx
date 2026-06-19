@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import "./DashboardPage.css";
 
 const MOCK_JOBS = [
@@ -10,8 +10,17 @@ const MOCK_JOBS = [
 
 const JOB_TYPES = ["Video Edit", "Photo Edit"];
 
+const SIDEBAR_LINKS = [
+  { icon: "🖥️", label: "Dashboard", path: "/dashboard" },
+  { icon: "🛒", label: "Marketplace", path: "/marketplace" },
+  { icon: "⚡", label: "My Jobs", path: "/jobs" },
+  { icon: "💳", label: "Pricing", path: "/pricing" },
+  { icon: "⚙️", label: "Settings", path: "/settings" },
+];
+
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const username = localStorage.getItem("username") || "User";
 
   const [file, setFile] = useState<File | null>(null);
@@ -59,8 +68,39 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      <main className="dash-main">
-        {/* Upload Card */}
+      <div className="dash-body">
+        <aside className="dash-sidebar">
+          <nav className="dash-sidebar-nav">
+            {SIDEBAR_LINKS.map((link) => (
+              <button
+                key={link.path}
+                className={`dash-sidebar-item ${location.pathname === link.path ? "active" : ""}`}
+                onClick={() => navigate(link.path)}
+              >
+                <span className="dash-sidebar-icon">{link.icon}</span>
+                <span>{link.label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        <main className="dash-main">
+          <div className="dash-stats">
+            <div className="dash-stat-card">
+              <p className="dash-stat-label">Jobs Run</p>
+              <p className="dash-stat-value">24</p>
+            </div>
+            <div className="dash-stat-card">
+              <p className="dash-stat-label">Files Processed</p>
+              <p className="dash-stat-value">138</p>
+            </div>
+            <div className="dash-stat-card">
+              <p className="dash-stat-label">Credits Remaining</p>
+              <p className="dash-stat-value">850</p>
+            </div>
+          </div>
+
+          {/* Upload Card */}
         <section className="dash-card">
           <h2 className="dash-section-title">Upload a File</h2>
           <form onSubmit={handleSubmit}>
@@ -147,6 +187,7 @@ export default function DashboardPage() {
           )}
         </section>
       </main>
+      </div>
     </div>
   );
 }
