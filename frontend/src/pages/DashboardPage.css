@@ -285,3 +285,124 @@
     display: none;
   }
 }
+
+/* ─── Body (sidebar + main wrapper) ──────────────────────── */
+.dash-body {
+  display: flex;
+  flex: 1;
+}
+
+/* ─── Sidebar ─────────────────────────────────────────────── */
+.dash-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  padding: 28px 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dash-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dash-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: Arial, Helvetica, sans-serif;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.18s, color 0.18s;
+}
+
+.dash-sidebar-item:hover {
+  background: rgba(56, 189, 248, 0.07);
+  color: #e2e8f0;
+}
+
+.dash-sidebar-item.active {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+}
+
+.dash-sidebar-icon {
+  font-size: 17px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* ─── Stat cards ──────────────────────────────────────────── */
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.dash-stat-card {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dash-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #475569;
+  margin: 0;
+}
+
+.dash-stat-value {
+  font-size: 34px;
+  font-weight: 800;
+  color: #38bdf8;
+  margin: 0;
+  line-height: 1;
+}
+
+/* ─── Responsive (sidebar) ────────────────────────────────── */
+@media (max-width: 768px) {
+  .dash-body {
+    flex-direction: column;
+  }
+
+  .dash-sidebar {
+    width: 100%;
+    padding: 12px 5%;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .dash-sidebar-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .dash-sidebar-item {
+    flex: 0 1 auto;
+    padding: 8px 12px;
+    font-size: 13px;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .dash-stats {
+    grid-template-columns: 1fr;
+  }
+}
