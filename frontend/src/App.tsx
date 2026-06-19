@@ -3,6 +3,8 @@ import HomePage from "./pages/HomePage";
 import TutorialPage from "./pages/TutorialPage";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
+import MarketplacePage from "./pages/MarketplacePage";
+import JobsPage from "./pages/JobsPage";
 
 function App() {
   return (
@@ -12,6 +14,8 @@ function App() {
         <Route path="/tutorial" element={<TutorialPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/marketplace" element={<MarketplacePage />} />
+        <Route path="/jobs" element={<JobsPage />} />
       </Routes>
     </BrowserRouter>
   );

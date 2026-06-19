@@ -39,6 +39,18 @@ export default function HomePage() {
           </button>
           <button
             className="nav-link-btn"
+            onClick={() => navigate("/marketplace")}
+          >
+            Marketplace
+          </button>
+          <button
+            className="nav-link-btn"
+            onClick={() => navigate("/jobs")}
+          >
+            Jobs
+          </button>
+          <button
+            className="nav-link-btn"
             onClick={() => navigate("/tutorial")}
           >
             Tutorial

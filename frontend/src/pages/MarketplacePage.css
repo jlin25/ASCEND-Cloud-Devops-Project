@@ -1,0 +1,142 @@
+/* ─── Marketplace layout overrides ───────────────────────── */
+.mkt-main {
+  max-width: 1040px !important;
+}
+
+/* ─── Page header ─────────────────────────────────────────── */
+.mkt-header {
+  margin-bottom: 8px;
+}
+
+.mkt-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #e2e8f0;
+  margin: 0 0 6px;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.mkt-subtitle {
+  font-size: 14px;
+  color: #475569;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ─── Grid ────────────────────────────────────────────────── */
+.mkt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+/* ─── Card ────────────────────────────────────────────────── */
+.mkt-card {
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: Arial, Helvetica, sans-serif;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.mkt-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: radial-gradient(circle at 0% 0%, var(--card-accent, #38bdf8) 0%, transparent 65%);
+  opacity: 0;
+  transition: opacity 0.22s;
+}
+
+.mkt-card:hover {
+  border-color: var(--card-accent, #38bdf8);
+  background: rgba(30, 41, 59, 0.95);
+  transform: translateY(-2px);
+}
+
+.mkt-card:hover::before {
+  opacity: 0.06;
+}
+
+.mkt-card:active {
+  transform: translateY(0);
+}
+
+/* ─── Card icon ───────────────────────────────────────────── */
+.mkt-card-icon {
+  font-size: 32px;
+  line-height: 1;
+  position: relative;
+}
+
+/* ─── Card body ───────────────────────────────────────────── */
+.mkt-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.mkt-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.mkt-card-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* ─── Card footer ─────────────────────────────────────────── */
+.mkt-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
+}
+
+.mkt-card-time {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.mkt-card-price {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--card-accent, #38bdf8);
+}
+
+/* ─── Responsive ──────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .mkt-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .mkt-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mkt-title {
+    font-size: 20px;
+  }
+}
