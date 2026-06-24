@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#
+# Worker bootstrap. Runs once at first boot (and again on change, because the
+# instance sets user_data_replace_on_change). Rendered from ec2.tf via
+# templatefile() — the $${var} values below are Terraform interpolations, not
+# shell variables.
+set -euxo pipefail
+
+REGION="${region}"
+PREFIX="${ssm_prefix}"
+REPO_URL="${repo_url}"
+REPO_BRANCH="${repo_branch}"
+
+# --- 1. System packages ----------------------------------------------------
+# aws-cli v2 ships preinstalled on Amazon Linux 2023.
+dnf update -y
+dnf install -y python3 python3-pip git
+# ffmpeg isn't in the AL2023 core repos; best-effort so boot doesn't fail while
+# the job-processing logic is still stubbed. Swap in a static build when needed.
+dnf install -y ffmpeg || echo "ffmpeg not available from dnf; install manually before enabling real transcoding"
+
+# --- 2. Pull runtime config from SSM into an env file ----------------------
+# boto3 on the instance gets its AWS credentials from the instance role, so we
+# only need queue/db config here — no access keys.
+param() { aws ssm get-parameter --region "$REGION" --name "$1" $${2:-} --query Parameter.Value --output text; }
+
+mkdir -p /etc/ascend
+{
+  echo "AWS_REGION=$REGION"
+  echo "SQS_QUEUE_URL=$(param "$PREFIX/queue_url")"
+  echo "SQS_DLQ_URL=$(param "$PREFIX/dlq_url")"
+  echo "DB_URL=$(param "$PREFIX/db_url" --with-decryption)"
+  echo "DB_SERVICE_KEY=$(param "$PREFIX/db_service_key" --with-decryption)"
+} > /etc/ascend/worker.env
+chmod 600 /etc/ascend/worker.env
+
+# --- 3. Deploy + run the worker (only if a repo URL was provided) ----------
+if [ -n "$REPO_URL" ]; then
+  rm -rf /opt/ascend
+  git clone --branch "$REPO_BRANCH" --depth 1 "$REPO_URL" /opt/ascend
+  pip3 install -r /opt/ascend/backend/requirements.txt
+
+  cat > /etc/systemd/system/ascend-worker.service <<'UNIT'
+[Unit]
+Description=ASCEND job worker (polls SQS, processes media jobs)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ascend/backend
+EnvironmentFile=/etc/ascend/worker.env
+ExecStart=/usr/bin/python3 worker.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+  systemctl daemon-reload
+  systemctl enable --now ascend-worker.service
+else
+  echo "worker_repo_url not set; box provisioned but no code deployed."
+  echo "Config is in /etc/ascend/worker.env."
+fi

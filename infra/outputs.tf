@@ -29,3 +29,14 @@ output "app_secret_access_key" {
   value       = aws_iam_access_key.app.secret
   sensitive   = true
 }
+
+# --- EC2 worker ------------------------------------------------------------
+output "worker_instance_id" {
+  description = "EC2 instance id of the worker. Get a shell with: aws ssm start-session --target <id>"
+  value       = aws_instance.worker.id
+}
+
+output "worker_public_ip" {
+  description = "Public IP of the worker (for debugging; access is normally via SSM)."
+  value       = aws_instance.worker.public_ip
+}
