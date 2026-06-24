@@ -33,12 +33,30 @@ export default function HomePage() {
         <div className="home-nav-right">
           <button
             className="nav-link-btn"
+            onClick={() => navigate("/dashboard")}
+          >
+            Dashboard
+          </button>
+          <button
+            className="nav-link-btn"
+            onClick={() => navigate("/marketplace")}
+          >
+            Marketplace
+          </button>
+          <button
+            className="nav-link-btn"
+            onClick={() => navigate("/jobs")}
+          >
+            Jobs
+          </button>
+          <button
+            className="nav-link-btn"
             onClick={() => navigate("/tutorial")}
           >
             Tutorial
           </button>
           <button className="nav-link-btn">Docs</button>
-          <button className="nav-cta">Get Started</button>
+          <button className="nav-cta" onClick={() => navigate("/login")}>Get Started</button>
         </div>
       </nav>
 

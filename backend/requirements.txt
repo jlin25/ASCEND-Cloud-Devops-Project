@@ -41,3 +41,6 @@ supabase
 python-dotenv
 fastapi
 uvicorn
+bcrypt
+python-jose[cryptography]
+python-multipart

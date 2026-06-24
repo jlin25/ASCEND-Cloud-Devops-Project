@@ -3,6 +3,7 @@ CREATE TYPE job_status AS ENUM ('pending', 'processing', 'done', 'failed');
 CREATE TABLE IF NOT EXISTS jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     status job_status DEFAULT 'pending',
+    processing_key TEXT,
     input_file_url TEXT,
     output_file_url TEXT,
     job_type TEXT,
