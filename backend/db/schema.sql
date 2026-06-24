@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     status job_status DEFAULT 'pending',
     processing_key TEXT,
     input_file_url TEXT,
-    output_file_url TEXT,
     job_type TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     retry_count INT DEFAULT 0,
