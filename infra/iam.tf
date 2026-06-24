@@ -15,6 +15,20 @@ data "aws_iam_policy_document" "jobs_access" {
       aws_sqs_queue.jobs_dlq.arn,
     ]
   }
+
+  statement {
+    sid = "FileStorageAccess"
+    effect = "Allow"
+    actions = [
+      "s3.PutObject",
+      "s3.GetObject",
+      "s3.CopyObject",
+    ]
+    resources = [
+      aws_s3_bucket.file_storage.arn,
+      "${aws_s3_bucket.file_storage.arn}/*",
+    ]
+  }
 }
 
 resource "aws_iam_policy" "jobs_access" {
