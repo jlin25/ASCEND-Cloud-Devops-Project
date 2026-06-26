@@ -30,12 +30,12 @@ def run():
                     "id", job_id
                 ).execute()
                 job = job_adapter.validate_python(body)
-                output_file_url = handle(job)
+                output_key = handle(job)
                 database.table("jobs").update(
                     {
                         "status": "done",
                         "progress": 100,
-                        "output_file_url": output_file_url,
+                        "output_key": output_key,
                     }
                 ).eq("id", job_id).execute()
                 queue.delete(msg["ReceiptHandle"])

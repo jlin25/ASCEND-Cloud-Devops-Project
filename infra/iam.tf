@@ -20,9 +20,9 @@ data "aws_iam_policy_document" "jobs_access" {
     sid = "FileStorageAccess"
     effect = "Allow"
     actions = [
-      "s3.PutObject",
-      "s3.GetObject",
-      "s3.CopyObject",
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:DeleteObject",
     ]
     resources = [
       aws_s3_bucket.file_storage.arn,
