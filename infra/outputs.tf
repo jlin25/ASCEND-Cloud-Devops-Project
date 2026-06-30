@@ -9,8 +9,14 @@ output "dlq_url" {
   value       = aws_sqs_queue.jobs_dlq.url
 }
 
+# S3_BUCKET_NAME in env
+output "bucket_name" {
+  description = "Name of the S3 file storage bucket"
+  value = aws_s3_bucket.file_storage.bucket
+}
+
 output "aws_region" {
-  description = "Region the queues live in."
+  description = "Region the queues and S3 live in."
   value       = var.aws_region
 }
 

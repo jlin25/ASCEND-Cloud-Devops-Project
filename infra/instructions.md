@@ -17,6 +17,7 @@ cd infra
   echo "AWS_REGION=$(terraform output -raw aws_region)"
   echo "AWS_ACCESS_KEY_ID=$(terraform output -raw app_access_key_id)"
   echo "AWS_SECRET_ACCESS_KEY=$(terraform output -raw app_secret_access_key)"
+  echo "S3_BUCKET_NAME=$(terraform output -raw bucket_name)"
 } >> ../backend/.env
 
 when done, terraform destroy

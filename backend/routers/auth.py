@@ -1,20 +1,22 @@
 import os
-import bcrypt
-from jose import jwt
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException
+
+import bcrypt
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from pydantic import BaseModel
+
 from db.client import database
 
 router = APIRouter()
 
-<<<<<<< HEAD
-=======
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 
->>>>>>> 11b10462b48890f9e96bf4460780bc54fd1cbc48
+security = HTTPBearer()
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -26,15 +28,11 @@ class RegisterRequest(BaseModel):
     password: str
 
 
-<<<<<<< HEAD
-@router.post("auth/login")
-async def login(request: LoginRequest):
-    response = (
-        database.table("users").select("*").eq("username", request.username).execute()
-    )
-    if not response.data:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
-=======
+class User(BaseModel):
+    id: str
+    username: str
+
+
 def create_token(user_id: str, username: str) -> str:
     payload = {
         "sub": user_id,
@@ -44,75 +42,126 @@ def create_token(user_id: str, username: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+        user_id = payload.get("sub")
+        username = payload.get("username")
+
+        if user_id is None or username is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        response = database.table("users").select("*").eq("id", user_id).execute()
+
+        if not response.data:
+            raise HTTPException(
+                status_code=401,
+                detail="User no longer exists",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user_data = response.data[0]
+        return User(
+            id=user_data["id"],
+            username=user_data["username"],
+        )
+
+    except JWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 @router.post("/auth/register")
 async def register(request: RegisterRequest):
-    # Check if username already taken
-    existing = database.table("users").select("id").eq("username", request.username).execute()
+    existing = (
+        database.table("users").select("id").eq("username", request.username).execute()
+    )
+
     if existing.data:
-        raise HTTPException(status_code=400, detail="Username already taken.")
+        raise HTTPException(
+            status_code=400,
+            detail="Username already taken.",
+        )
 
-    # Hash the password — never store the raw password
-    password_hash = bcrypt.hashpw(request.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    password_hash = bcrypt.hashpw(
+        request.password.encode("utf-8"),
+        bcrypt.gensalt(),
+    ).decode("utf-8")
 
-    # Insert new user into Supabase
-    result = database.table("users").insert({
-        "username": request.username,
-        "password_hash": password_hash,
-    }).execute()
+    result = (
+        database.table("users")
+        .insert(
+            {
+                "username": request.username,
+                "hashed_password": password_hash,
+            }
+        )
+        .execute()
+    )
 
     if not result.data:
-        raise HTTPException(status_code=500, detail="Failed to create account.")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create account.",
+        )
 
-    new_user = result.data[0]
-    token = create_token(new_user["id"], new_user["username"])
+    user = result.data[0]
+    token = create_token(user["id"], user["username"])
 
-    return {"token": token, "username": new_user["username"]}
+    return {
+        "token": token,
+        "username": user["username"],
+    }
 
 
 @router.post("/auth/login")
 async def login(request: LoginRequest):
-    # Look up user by username
-    response = database.table("users").select("*").eq("username", request.username).execute()
+    response = (
+        database.table("users").select("*").eq("username", request.username).execute()
+    )
+
     if not response.data:
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
->>>>>>> 11b10462b48890f9e96bf4460780bc54fd1cbc48
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     user = response.data[0]
 
-<<<<<<< HEAD
-
-@router.post("auth/register")
-async def register(request: RegisterRequest):
-    existing = (
-        database.table("users").select("*").eq("username", request.username).execute()
-    )
-    if existing.data:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    # When password hashing is implemented, hash the password then store in database + other security logic
-    return {"message": "Registration successful"}
-
-
-@router.post("auth/logout")
-async def logout():
-    # Implement session token invalidation logic when authentication is implemented
-    return {"message": "Logout successful"}
-
-=======
-    # Check submitted password against stored hash
     password_matches = bcrypt.checkpw(
         request.password.encode("utf-8"),
-        user["password_hash"].encode("utf-8")
+        user["hashed_password"].encode("utf-8"),
     )
+
     if not password_matches:
-        raise HTTPException(status_code=401, detail="Invalid username or password.")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     token = create_token(user["id"], user["username"])
 
-    return {"token": token, "username": user["username"]}
+    return {
+        "token": token,
+        "username": user["username"],
+    }
 
 
 @router.post("/auth/logout")
 async def logout():
-    # JWT tokens are stateless — logout is handled by the frontend deleting the token
+    # JWT tokens are stateless; logout is handled client-side by deleting the token.
     return {"message": "Logged out successfully."}
->>>>>>> 11b10462b48890f9e96bf4460780bc54fd1cbc48
