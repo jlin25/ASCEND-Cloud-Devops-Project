@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from db.client import database
 from jobs import JobRequest  # <-- the canonical type
 from job_queue import JobQueue
-from auth import get_current_user, User
+from routers.auth import get_current_user, User
 from s3_client import S3Client
 
 router = APIRouter()
@@ -34,7 +34,7 @@ async def create_task(job: JobRequest, current_user: User = Depends(get_current_
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     user_id = current_user.id
-    file_key = s3.upload_stream(file.filename, file.file, file.content_type)
+    file_key = s3.upload_stream(user_id, file.filename, file.file, file.content_type)
     return {"file_key": file_key}
 
 #user uploads file -> call /upload to upload file to s3 and get key -> call /tasks with key to finish processing and upload info to db

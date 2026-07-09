@@ -47,7 +47,7 @@ def get_current_user(credentials : HTTPAuthorizationCredentials = Depends(securi
         if username is None or user_id is None:
             raise HTTPException(
                 status_code=401,
-                details="Invalid authentication token",
+                detail="Invalid authentication token",
                 headers={"WWW-Authenticate": "Bearer"}
             )
         
@@ -57,7 +57,7 @@ def get_current_user(credentials : HTTPAuthorizationCredentials = Depends(securi
         if not response.data:
             raise HTTPException(
                 status_code=401,
-                details="User no longer exists",
+                detail="User no longer exists",
                 headers={"WWW-Authenticate": "Bearer"}
             )
         user_data = response.data[0]
@@ -65,13 +65,13 @@ def get_current_user(credentials : HTTPAuthorizationCredentials = Depends(securi
     except JWTError:
         raise HTTPException(
             status_code=401,
-            details="Invalid authentication token",
+            detail="Invalid authentication token",
             headers={"WWW-Authenticate": "Bearer"}
         )
     except Exception:
         raise HTTPException(
             status_code=401,
-            details="Invalid authentication token",
+            detail="Invalid authentication token",
             headers={"WWW-Authenticate": "Bearer"}
         )
 
