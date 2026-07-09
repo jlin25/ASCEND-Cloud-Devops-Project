@@ -22,7 +22,7 @@ class TrimJob(BaseModel):
     end_seconds: float
 
 
-type JobRequest = Annotated[
+JobRequest = Annotated[
     TranscodeJob | TrimJob | ExtractAudioJob,
     Field(discriminator="type"),
 ]
