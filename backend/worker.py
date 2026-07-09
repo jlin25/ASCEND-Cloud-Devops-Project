@@ -25,28 +25,35 @@ def process_video_quality(job: VideoQualityJob, user_id: str) -> str:
     height = _HEIGHT[job.resolution]
     suffix = os.path.splitext(job.file_url)[1] or ".mp4"
 
-    with tempfile.NamedTemporaryFile(suffix=suffix) as src, \
-            tempfile.NamedTemporaryFile(suffix=".mp4") as dst:
-        # 1. download input from S3
+    with (
+        tempfile.NamedTemporaryFile(suffix=suffix) as src,
+        tempfile.NamedTemporaryFile(suffix=".mp4") as dst,
+    ):
         body = s3.download_stream(job.file_url)
         for chunk in body.iter_chunks():
             src.write(chunk)
         src.flush()
 
-        # 2. re-encode to the target resolution (scale height, keep aspect ratio)
         subprocess.run(
             [
-                "ffmpeg", "-y", "-i", src.name,
-                "-vf", f"scale=-2:{height}",
-                "-c:v", "libx264", "-crf", "23",
-                "-c:a", "aac",
+                "ffmpeg",
+                "-y",
+                "-i",
+                src.name,
+                "-vf",
+                f"scale=-2:{height}",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "23",
+                "-c:a",
+                "aac",
                 dst.name,
             ],
             check=True,
             capture_output=True,
         )
 
-        # 3. upload result to S3 under processed/{user_id}/...
         filename = os.path.basename(job.file_url)
         with open(dst.name, "rb") as out:
             return s3.upload_stream(
