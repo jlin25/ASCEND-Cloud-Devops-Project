@@ -1,12 +1,32 @@
-from fastapi import APIRouter, HTTPException
+import uuid
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from pydantic import BaseModel
 from db.client import database
+from aws_client import s3_client, BUCKET_NAME
+from routers.auth import get_current_user_id
 
 router = APIRouter()
 
 class TaskRequest(BaseModel):
     input_file_url: str
     job_type: str
+
+@router.post("/tasks/upload")
+async def upload_task(
+    file: UploadFile = File(...),
+    job_type: str = Form(...),
+    user_id: str = Depends(get_current_user_id),
+):
+    file_key = f"{user_id}/{uuid.uuid4()}-{file.filename}"
+    s3_client.upload_fileobj(file.file, BUCKET_NAME, file_key)
+
+    response = database.table("jobs").insert({
+        "input_file_url": file_key,
+        "job_type": job_type,
+        "user_id": user_id,
+    }).execute()
+
+    return {"message": "Task created successfully", "task_id": response.data[0]["id"]}
 
 @router.post("/tasks")
 async def create_task(task_request: TaskRequest):

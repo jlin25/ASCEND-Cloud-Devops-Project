@@ -2,9 +2,10 @@ import os
 import bcrypt
 from jose import jwt
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 from db.client import database
+from jose import JWTError
 
 router = APIRouter()
 
@@ -30,6 +31,19 @@ def create_token(user_id: str, username: str) -> str:
         "exp": datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user_id(authorization: str = Header(...)) -> str:
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
+    token = authorization.removeprefix("Bearer ")
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    return payload["sub"]
 
 
 @router.post("/auth/register")

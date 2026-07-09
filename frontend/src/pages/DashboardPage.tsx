@@ -43,12 +43,31 @@ export default function DashboardPage() {
     if (e.dataTransfer.files?.[0]) setFile(e.dataTransfer.files[0]);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
-    // TODO: connect to POST /tasks when Supabase jobs table is ready
-    alert(`Job submitted!\nFile: ${file.name}\nType: ${jobType}`);
-    setFile(null);
+
+    const token = localStorage.getItem("token");
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("job_type", jobType);
+
+    try {
+      const res = await fetch("http://localhost:8001/tasks/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || "Upload failed.");
+        return;
+      }
+      alert(`Job submitted!\nFile: ${file.name}\nType: ${jobType}`);
+      setFile(null);
+    } catch {
+      alert("Could not reach the server. Is the backend running?");
+    }
   }
 
   function statusClass(status: string) {
