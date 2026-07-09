@@ -28,7 +28,7 @@ async def create_task(job: JobRequest, current_user: User = Depends(get_current_
     )
     job_id = response.data[0]["id"]
 
-    queue.send({"job_id": job_id, **job.model_dump()})  # full typed payload + id
+    queue.send({"job_id": job_id, "user_id": user_id, **job.model_dump()})  # full typed payload + id
     return {"message": "Task created successfully", "task_id": job_id}
 
 @router.post("/upload")

@@ -22,8 +22,14 @@ class TrimJob(BaseModel):
     end_seconds: float
 
 
+class VideoQualityJob(BaseModel):
+    type: Literal["video_quality"]
+    file_url: str
+    resolution: Literal["720p", "1080p", "4k"]
+
+
 JobRequest = Annotated[
-    TranscodeJob | TrimJob | ExtractAudioJob,
+    TranscodeJob | TrimJob | ExtractAudioJob | VideoQualityJob,
     Field(discriminator="type"),
 ]
 job_adapter = TypeAdapter(JobRequest)
