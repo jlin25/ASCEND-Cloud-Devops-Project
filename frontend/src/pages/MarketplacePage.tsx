@@ -64,6 +64,15 @@ const TASK_TEMPLATES = [
     icon: "🔄",
     accent: "#38bdf8",
   },
+  {
+    id: "image-resize",
+    name: "Image Resize/Upscale",
+    description: "Upscale, downscale, or resize images to any dimension using AI-powered scaling that preserves detail.",
+    estimatedTime: "~30 sec",
+    price: "$0.49",
+    icon: "🖼️",
+    accent: "#a78bfa",
+  },
 ];
 
 export default function MarketplacePage() {

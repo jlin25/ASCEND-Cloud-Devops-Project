@@ -8,7 +8,11 @@ const MOCK_JOBS = [
   { id: "3", job_type: "Video Edit", input_file_url: "demo.mov", status: "pending", created_at: "2026-06-18" },
 ];
 
-const JOB_TYPES = ["Video Edit", "Photo Edit"];
+const JOB_CATEGORIES: Record<string, string[]> = {
+  "Video Editing": ["Video Upscale", "Format Converter", "Subtitle Generator", "AI Voiceover"],
+  "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement"],
+};
+const CATEGORIES = Object.keys(JOB_CATEGORIES);
 
 const SIDEBAR_LINKS = [
   { icon: "🖥️", label: "Dashboard", path: "/dashboard" },
@@ -24,8 +28,15 @@ export default function DashboardPage() {
   const username = localStorage.getItem("username") || "User";
 
   const [file, setFile] = useState<File | null>(null);
-  const [jobType, setJobType] = useState(JOB_TYPES[0]);
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [task, setTask] = useState(JOB_CATEGORIES[CATEGORIES[0]][0]);
   const [dragOver, setDragOver] = useState(false);
+
+  function handleCategoryChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const nextCategory = e.target.value;
+    setCategory(nextCategory);
+    setTask(JOB_CATEGORIES[nextCategory][0]);
+  }
 
   function handleLogout() {
     localStorage.removeItem("token");
@@ -47,7 +58,7 @@ export default function DashboardPage() {
     e.preventDefault();
     if (!file) return;
     // TODO: connect to POST /tasks when Supabase jobs table is ready
-    alert(`Job submitted!\nFile: ${file.name}\nType: ${jobType}`);
+    alert(`Job submitted!\nFile: ${file.name}\nType: ${task}`);
     setFile(null);
   }
 
@@ -135,13 +146,26 @@ export default function DashboardPage() {
 
             <div className="dash-row">
               <div className="dash-field">
-                <label className="dash-label">Job Type</label>
+                <label className="dash-label">Category</label>
                 <select
                   className="dash-select"
-                  value={jobType}
-                  onChange={(e) => setJobType(e.target.value)}
+                  value={category}
+                  onChange={handleCategoryChange}
                 >
-                  {JOB_TYPES.map((t) => (
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="dash-field">
+                <label className="dash-label">Task</label>
+                <select
+                  className="dash-select"
+                  value={task}
+                  onChange={(e) => setTask(e.target.value)}
+                >
+                  {JOB_CATEGORIES[category].map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
