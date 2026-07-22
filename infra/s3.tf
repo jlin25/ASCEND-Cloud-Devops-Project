@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "file_storage" {
-    bucket = "${var.project_name}-file-storage"
+    bucket = "ascend-cloud-uploads"
     force_destroy = false
 }
 
