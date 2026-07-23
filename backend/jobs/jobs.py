@@ -28,8 +28,15 @@ class VideoQualityJob(BaseModel):
     resolution: Literal["720p", "1080p", "4k"]
 
 
+class ImageResizeJob(BaseModel):
+    type: Literal["image_resize"]
+    file_url: str
+    width: int
+    height: int
+
+
 JobRequest = Annotated[
-    TranscodeJob | TrimJob | ExtractAudioJob | VideoQualityJob,
+    TranscodeJob | TrimJob | ExtractAudioJob | VideoQualityJob | ImageResizeJob,
     Field(discriminator="type"),
 ]
 job_adapter = TypeAdapter(JobRequest)

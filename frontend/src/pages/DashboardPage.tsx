@@ -1,17 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { api, ApiError } from "../api";
 import "./DashboardPage.css";
 
-const MOCK_JOBS = [
-  { id: "1", job_type: "Video Edit", input_file_url: "vacation.mp4", status: "complete", created_at: "2026-06-17" },
-  { id: "2", job_type: "Photo Edit", input_file_url: "portrait.jpg", status: "running", created_at: "2026-06-18" },
-  { id: "3", job_type: "Video Edit", input_file_url: "demo.mov", status: "pending", created_at: "2026-06-18" },
-];
+type Job = {
+  id: string;
+  job_type: string;
+  input_key: string;
+  output_key: string | null;
+  status: string;
+  created_at: string;
+};
+
+function basename(key: string) {
+  return key.split("/").pop() ?? key;
+}
+
+
 
 const JOB_CATEGORIES: Record<string, string[]> = {
   "Video Editing": ["Video Upscale", "Format Converter", "Subtitle Generator", "AI Voiceover"],
   "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement"],
 };
+
+const TASK_TYPE: Record<string, string> = {
+  "Image Resize/Upscale": "image_resize",
+};
+
 const CATEGORIES = Object.keys(JOB_CATEGORIES);
 
 const SIDEBAR_LINKS = [
@@ -31,6 +46,39 @@ export default function DashboardPage() {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [task, setTask] = useState(JOB_CATEGORIES[CATEGORIES[0]][0]);
   const [dragOver, setDragOver] = useState(false);
+  const [width, setWidth] = useState("800");
+  const [height, setHeight] = useState("600");
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+
+  async function refreshJobs() {
+    try {
+      const data = (await api.listTasks()) as { tasks: Job[] };
+      setJobs(data.tasks);
+    } catch {
+      // Recent Jobs staying empty/stale is a soft failure — not worth
+      // interrupting the user's upload flow over.
+    }
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount; see https://react.dev/learn/you-might-not-need-an-effect#fetching-data
+    refreshJobs();
+  }, []);
+
+  async function handleViewResult(jobId: string) {
+    setViewingId(jobId);
+    try {
+      const data = (await api.getTaskResult(jobId)) as { output_file_url: string };
+      window.open(data.output_file_url, "_blank");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Something went wrong.";
+      alert(`Could not load result: ${message}`);
+    } finally {
+      setViewingId(null);
+    }
+  }
+
 
   function handleCategoryChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const nextCategory = e.target.value;
@@ -54,17 +102,36 @@ export default function DashboardPage() {
     if (e.dataTransfer.files?.[0]) setFile(e.dataTransfer.files[0]);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!file) return;
-    // TODO: connect to POST /tasks when Supabase jobs table is ready
-    alert(`Job submitted!\nFile: ${file.name}\nType: ${task}`);
-    setFile(null);
+
+    if (!TASK_TYPE[task]) {
+      alert(`"${task}" isn't wired up to the backend yet.`);
+      return;
+    }
+
+    try {
+      const { file_key } = await api.upload(file);
+      await api.createTask({
+        type: "image_resize",
+        file_url: file_key,
+        width: Number(width),
+        height: Number(height),
+      });
+      setFile(null);
+      alert("Job submitted!");
+      await refreshJobs();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Something went wrong.";
+      alert(`Job submission failed: ${message}`);
+    }
   }
 
   function statusClass(status: string) {
-    if (status === "complete") return "badge badge-complete";
-    if (status === "running") return "badge badge-running";
+    if (status === "done") return "badge badge-complete";
+    if (status === "processing") return "badge badge-running";
+    if (status === "failed") return "badge badge-failed";
     return "badge badge-pending";
   }
 
@@ -171,6 +238,29 @@ export default function DashboardPage() {
                 </select>
               </div>
 
+              {task === "Image Resize/Upscale" && (
+                <>
+                  <div className="dash-field">
+                    <label className="dash-label">Width</label>
+                    <input
+                      type="number"
+                      className="dash-select"
+                      value={width}
+                      onChange={(e) => setWidth(e.target.value)}
+                    />
+                  </div>
+                  <div className="dash-field">
+                    <label className="dash-label">Height</label>
+                    <input
+                      type="number"
+                      className="dash-select"
+                      value={height}
+                      onChange={(e) => setHeight(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
               <button
                 className="dash-submit"
                 type="submit"
@@ -185,7 +275,7 @@ export default function DashboardPage() {
         {/* Jobs List */}
         <section className="dash-card">
           <h2 className="dash-section-title">Recent Jobs</h2>
-          {MOCK_JOBS.length === 0 ? (
+          {jobs.length === 0 ? (
             <p className="dash-empty">No jobs yet. Upload a file to get started.</p>
           ) : (
             <table className="dash-table">
@@ -195,15 +285,29 @@ export default function DashboardPage() {
                   <th>Type</th>
                   <th>Status</th>
                   <th>Date</th>
+                  <th>Result</th>
                 </tr>
               </thead>
               <tbody>
-                {MOCK_JOBS.map((job) => (
+                {jobs.map((job) => (
                   <tr key={job.id}>
-                    <td className="dash-file">{job.input_file_url}</td>
+                    <td className="dash-file">{basename(job.input_key)}</td>
                     <td>{job.job_type}</td>
                     <td><span className={statusClass(job.status)}>{job.status}</span></td>
-                    <td className="dash-date">{job.created_at}</td>
+                    <td className="dash-date">{new Date(job.created_at).toLocaleString()}</td>
+                    <td>
+                      {job.status === "done" ? (
+                        <button
+                          className="dash-view-result"
+                          onClick={() => handleViewResult(job.id)}
+                          disabled={viewingId === job.id}
+                        >
+                          {viewingId === job.id ? "Loading..." : "View"}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

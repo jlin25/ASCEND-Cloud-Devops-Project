@@ -38,24 +38,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Login */
-        post: operations["loginauth_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "auth/register": {
+    "/auth/register": {
         parameters: {
             query?: never;
             header?: never;
@@ -65,14 +48,31 @@ export interface paths {
         get?: never;
         put?: never;
         /** Register */
-        post: operations["registerauth_register_post"];
+        post: operations["register_auth_register_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "auth/logout": {
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
         parameters: {
             query?: never;
             header?: never;
@@ -82,7 +82,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Logout */
-        post: operations["logoutauth_logout_post"];
+        post: operations["logout_auth_logout_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -101,6 +101,23 @@ export interface paths {
         put?: never;
         /** Create Task */
         post: operations["create_task_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload File */
+        post: operations["upload_file_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -146,6 +163,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_upload_file_upload_post */
+        Body_upload_file_upload_post: {
+            /** File */
+            file: string;
+        };
         /** ExtractAudioJob */
         ExtractAudioJob: {
             /**
@@ -165,6 +187,20 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** ImageResizeJob */
+        ImageResizeJob: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "image_resize";
+            /** File Url */
+            file_url: string;
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -227,6 +263,21 @@ export interface components {
             /** Context */
             ctx?: Record<string, never>;
         };
+        /** VideoQualityJob */
+        VideoQualityJob: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "video_quality";
+            /** File Url */
+            file_url: string;
+            /**
+             * Resolution
+             * @enum {string}
+             */
+            resolution: "720p" | "1080p" | "4k";
+        };
     };
     responses: never;
     parameters: never;
@@ -276,40 +327,7 @@ export interface operations {
             };
         };
     };
-    loginauth_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    registerauth_register_post: {
+    register_auth_register_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -342,7 +360,40 @@ export interface operations {
             };
         };
     };
-    logoutauth_logout_post: {
+    login_auth_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_auth_logout_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -391,7 +442,40 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TranscodeJob"] | components["schemas"]["TrimJob"] | components["schemas"]["ExtractAudioJob"];
+                "application/json": components["schemas"]["TranscodeJob"] | components["schemas"]["TrimJob"] | components["schemas"]["ExtractAudioJob"] | components["schemas"]["VideoQualityJob"] | components["schemas"]["ImageResizeJob"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_file_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_file_upload_post"];
             };
         };
         responses: {
