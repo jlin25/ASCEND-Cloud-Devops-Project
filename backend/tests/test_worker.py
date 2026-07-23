@@ -8,7 +8,7 @@ import subprocess as sp
 import pytest
 
 import worker
-from jobs import VideoQualityJob
+from jobs import VideoQualityJob, ImageResizeJob
 
 
 class FakeBody:
@@ -88,4 +88,66 @@ def test_handle_dispatches_video_quality(monkeypatch):
     result = worker.handle(job, "u9")
 
     assert result == "processed/u1/out.mp4"
+    assert seen["args"][1] == "u9"
+
+
+def test_process_image_resize_uploads_to_processed_prefix(captured):
+    job = ImageResizeJob(
+        type="image_resize", file_url="uploads/u1/photo.png", width=800, height=600
+    )
+    out = worker.process_image_resize(job, "u1")
+
+    assert out == "processed/u1/photo.png"
+    assert captured["upload"]["user_id"] == "u1"
+    assert captured["upload"]["prefix"] == "processed"
+    assert captured["upload"]["filename"] == "photo.png"
+
+
+def test_process_image_resize_preserves_content_type(captured):
+    job = ImageResizeJob(
+        type="image_resize", file_url="uploads/u1/photo.png", width=800, height=600
+    )
+    worker.process_image_resize(job, "u1")
+
+    # content-type should be derived from the original file's extension (.png),
+    # not hardcoded to jpeg
+    assert captured["upload"]["content_type"] == "image/png"
+
+
+def test_process_image_resize_invokes_ffmpeg(captured):
+    job = ImageResizeJob(
+        type="image_resize", file_url="uploads/u1/a.jpg", width=400, height=300
+    )
+    worker.process_image_resize(job, "u1")
+
+    cmd = captured["cmd"]
+    assert cmd[0] == "ffmpeg"
+    assert "scale=400:300" in cmd
+    # errors should surface (check=True) so the run loop marks the job failed
+    assert captured["run_kwargs"].get("check") is True
+
+
+@pytest.mark.parametrize(
+    "width,height", [(100, 100), (1920, 1080), (50, 200)]
+)
+def test_image_resize_dimensions_land_in_ffmpeg_command(captured, width, height):
+    job = ImageResizeJob(
+        type="image_resize", file_url="uploads/u1/a.png", width=width, height=height
+    )
+    worker.process_image_resize(job, "u1")
+    assert f"scale={width}:{height}" in captured["cmd"]
+
+
+def test_handle_dispatches_image_resize(monkeypatch):
+    seen = {}
+
+    def fake_process(job, user_id):
+        seen["args"] = (job, user_id)
+        return "processed/u1/out.png"
+
+    monkeypatch.setattr(worker, "process_image_resize", fake_process)
+    job = ImageResizeJob(type="image_resize", file_url="k", width=100, height=100)
+    result = worker.handle(job, "u9")
+
+    assert result == "processed/u1/out.png"
     assert seen["args"][1] == "u9"

@@ -32,10 +32,15 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = localStorage.getItem("token");
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       credentials: "include",
       ...init,
     });
@@ -50,11 +55,38 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.status === 204 ? (undefined as T) : (res.json() as Promise<T>);
 }
 
+async function upload(file: File): Promise<{ file_key: string }> {
+  const token = localStorage.getItem("token");
+  const body = new FormData();
+  body.append("file", file);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/upload`, {
+      method: "POST",
+      // No Content-Type here — the browser sets it (with the multipart
+      // boundary) automatically when the body is a FormData instance.
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+      body,
+    });
+  } catch {
+    throw new ApiError(0, "Could not reach the backend");
+  }
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    throw new ApiError(res.status, errBody?.detail ?? res.statusText);
+  }
+  return res.json();
+}
+
 export const api = {
   // Health check — no external deps; use for a connectivity indicator.
   health: () => request("/api/message"),
 
   // Tasks.
+  upload,
   createTask: (job: CreateTaskBody) =>
     request("/tasks", { method: "POST", body: JSON.stringify(job) }),
   listTasks: () => request("/tasks"),
