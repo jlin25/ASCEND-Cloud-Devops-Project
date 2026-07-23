@@ -70,6 +70,7 @@ populate_env() {
   {
     echo "SQS_QUEUE_URL=$(out queue_url)"
     echo "SQS_DLQ_URL=$(out dlq_url)"
+    echo "S3_BUCKET_NAME=$(out bucket_name)"
     echo "AWS_REGION=$(out aws_region)"
     echo "AWS_ACCESS_KEY_ID=$(out app_access_key_id)"
     echo "AWS_SECRET_ACCESS_KEY=$(out app_secret_access_key)"

@@ -14,10 +14,23 @@ REPO_BRANCH="${repo_branch}"
 # --- 1. System packages ----------------------------------------------------
 # aws-cli v2 ships preinstalled on Amazon Linux 2023.
 dnf update -y
-dnf install -y python3 python3-pip git
-# ffmpeg isn't in the AL2023 core repos; best-effort so boot doesn't fail while
-# the job-processing logic is still stubbed. Swap in a static build when needed.
-dnf install -y ffmpeg || echo "ffmpeg not available from dnf; install manually before enabling real transcoding"
+# AL2023's default python3 is 3.9, but the backend pins packages (e.g. anyio)
+# that need >=3.10, so install 3.11 explicitly and use it everywhere below.
+dnf install -y python3.11 python3.11-pip git tar xz
+
+# ffmpeg isn't in the AL2023 core repos, so install a prebuilt static build
+# (John Van Sickle's, the standard source for Linux static ffmpeg). This is
+# required by the video_quality job — the worker shells out to `ffmpeg`.
+if ! command -v ffmpeg >/dev/null 2>&1; then
+  FFMPEG_TMP="$(mktemp -d)"
+  curl -fsSL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
+    -o "$FFMPEG_TMP/ffmpeg.tar.xz"
+  tar -xf "$FFMPEG_TMP/ffmpeg.tar.xz" -C "$FFMPEG_TMP" --strip-components=1
+  install -m 0755 "$FFMPEG_TMP/ffmpeg" "$FFMPEG_TMP/ffprobe" /usr/local/bin/
+  rm -rf "$FFMPEG_TMP"
+fi
+# Confirm it's on PATH for the worker (systemd uses /usr/bin:/usr/local/bin).
+ffmpeg -version | head -1
 
 # --- 2. Pull runtime config from SSM into an env file ----------------------
 # boto3 on the instance gets its AWS credentials from the instance role, so we
@@ -29,6 +42,7 @@ mkdir -p /etc/ascend
   echo "AWS_REGION=$REGION"
   echo "SQS_QUEUE_URL=$(param "$PREFIX/queue_url")"
   echo "SQS_DLQ_URL=$(param "$PREFIX/dlq_url")"
+  echo "S3_BUCKET_NAME=$(param "$PREFIX/bucket_name")"
   echo "DB_URL=$(param "$PREFIX/db_url" --with-decryption)"
   echo "DB_SERVICE_KEY=$(param "$PREFIX/db_service_key" --with-decryption)"
 } > /etc/ascend/worker.env
@@ -38,7 +52,7 @@ chmod 600 /etc/ascend/worker.env
 if [ -n "$REPO_URL" ]; then
   rm -rf /opt/ascend
   git clone --branch "$REPO_BRANCH" --depth 1 "$REPO_URL" /opt/ascend
-  pip3 install -r /opt/ascend/backend/requirements.txt
+  python3.11 -m pip install -r /opt/ascend/backend/requirements.txt
 
   cat > /etc/systemd/system/ascend-worker.service <<'UNIT'
 [Unit]
@@ -50,7 +64,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/ascend/backend
 EnvironmentFile=/etc/ascend/worker.env
-ExecStart=/usr/bin/python3 worker.py
+ExecStart=/usr/bin/python3.11 worker.py
 Restart=always
 RestartSec=5
 
