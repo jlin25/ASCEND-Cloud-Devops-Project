@@ -12,10 +12,14 @@ from jobs import (
     ExtractAudioJob,
     VideoQualityJob,
     ImageResizeJob,
+    DeblurJob,
     job_adapter,
 )
 from s3_client import S3Client
 from typing import assert_never
+import cv2
+import numpy as np
+from huggingface_hub import hf_hub_download
 
 queue = JobQueue()
 s3 = S3Client()
@@ -23,6 +27,12 @@ s3 = S3Client()
 _HEIGHT = {"720p": 720, "1080p": 1080, "4k": 2160}
 
 
+deblur_model_path = hf_hub_download(
+    repo_id="opencv/deblurring_nafnet",
+    filename="deblurring_nafnet_2025may.onnx",
+)
+
+deblur_net = cv2.dnn.readNet(deblur_model_path)
 # mkstemp instead of NamedTemporaryFile for src/dst: ffmpeg needs to open
 # these paths itself (as the input and as the output), and on Windows a
 # NamedTemporaryFile's own handle stays open/locked for the whole `with`
@@ -72,6 +82,57 @@ def process_video_quality(job: VideoQualityJob, user_id: str) -> str:
     finally:
         os.remove(src_path)
         os.remove(dst_path)
+
+
+def process_image_deblur(job: DeblurJob, user_id: str) -> str:
+    suffix = os.path.splitext(job.file_url)[1] or ".jpg"
+    src_fd, src_path = tempfile.mkstemp(suffix=suffix)
+    dst_fd, dst_path = tempfile.mkstemp(suffix=suffix)
+    os.close(dst_fd)
+
+    try:
+        with os.fdopen(src_fd, "wb") as src:
+            body = s3.download_stream(job.file_url)
+            for chunk in body.iter_chunks():
+                src.write(chunk)
+        image = cv2.imread(src_path)
+        if image is None:
+            raise RuntimeError("Failed to read uploaded image.")
+        h, w = image.shape[:2]
+        blob = cv2.dnn.blobFromImage(
+            image,
+            scalefactor=1 / 255.0,
+            size=(w, h),
+            mean=(0, 0, 0),
+            swapRB=True,
+            crop=False,
+        )
+        deblur_net.setInput(blob)
+        output = deblur_net.forward()
+        output = output.squeeze(0)
+        output = np.transpose(output, (1, 2, 0))
+        output = np.clip(output, 0, 1)
+        output = (output * 255).astype(np.uint8)
+        output = cv2.cvtColor(output, cv2.COLOR_RGB2BGR)
+
+        cv2.imwrite(dst_path, output)
+        content_type = (
+            mimetypes.guess_type(job.file_url)[0] or "application/octet-stream"
+        )
+        filename = os.path.basename(job.file_url)
+        with open(dst_path, "rb") as out:
+            return s3.upload_stream(
+                user_id=user_id,
+                filename=filename,
+                stream=out,
+                content_type=content_type,
+                prefix="processed",
+            )
+    finally:
+        if os.path.exists(src_path):
+            os.remove(src_path)
+        if os.path.exists(dst_path):
+            os.remove(dst_path)
 
 
 def process_image_resize(job: ImageResizeJob, user_id: str) -> str:
@@ -127,6 +188,8 @@ def handle(job: JobRequest, user_id: str) -> str | None:
             return process_video_quality(job, user_id)
         case ImageResizeJob():
             return process_image_resize(job, user_id)
+        case DeblurJob():
+            return process_image_deblur(job, user_id)
         case _:
             assert_never(job)
 

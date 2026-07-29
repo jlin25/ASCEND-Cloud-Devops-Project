@@ -73,6 +73,15 @@ const TASK_TEMPLATES = [
     icon: "🖼️",
     accent: "#a78bfa",
   },
+  {
+    id: "deblur",
+    name: "Deblur",
+    description: "Sharpen blurry or out-of-focus photos using AI-powered deblurring.",
+    estimatedTime: "~30 sec",
+    price: "$0.49",
+    icon: "🔍",
+    accent: "#38bdf8",
+  },
 ];
 
 export default function MarketplacePage() {

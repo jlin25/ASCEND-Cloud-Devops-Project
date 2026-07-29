@@ -5,12 +5,14 @@ from .jobs import (
     VideoQualityJob,
     ImageResizeJob,
     JobRequest,
+    DeblurJob,
     job_adapter,
 )
 
 __all__ = [
     "TranscodeJob",
     "TrimJob",
+    "DeblurJob",
     "ExtractAudioJob",
     "JobRequest",
     "job_adapter",

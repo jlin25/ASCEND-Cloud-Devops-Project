@@ -20,11 +20,12 @@ function basename(key: string) {
 
 const JOB_CATEGORIES: Record<string, string[]> = {
   "Video Editing": ["Video Upscale", "Format Converter", "Subtitle Generator", "AI Voiceover"],
-  "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement"],
+  "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement", "Deblur"],
 };
 
 const TASK_TYPE: Record<string, string> = {
   "Image Resize/Upscale": "image_resize",
+  "Deblur": "deblur",
 };
 
 const CATEGORIES = Object.keys(JOB_CATEGORIES);
@@ -113,12 +114,12 @@ export default function DashboardPage() {
 
     try {
       const { file_key } = await api.upload(file);
-      await api.createTask({
-        type: "image_resize",
-        file_url: file_key,
-        width: Number(width),
-        height: Number(height),
-      });
+      const type = TASK_TYPE[task];
+      await api.createTask(
+        type === "image_resize"
+          ? { type, file_url: file_key, width: Number(width), height: Number(height) }
+          : { type, file_url: file_key }
+      );
       setFile(null);
       alert("Job submitted!");
       await refreshJobs();
