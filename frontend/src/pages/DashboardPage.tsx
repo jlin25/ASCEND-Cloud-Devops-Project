@@ -19,12 +19,14 @@ function basename(key: string) {
 
 
 const JOB_CATEGORIES: Record<string, string[]> = {
-  "Video Editing": ["Video Upscale", "Format Converter", "Subtitle Generator", "AI Voiceover"],
-  "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement"],
+  "Video Editing": ["Video Upscale", "Video Format Converter", "Subtitle Generator", "AI Voiceover"],
+  "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement", "Image Format Converter"],
 };
 
 const TASK_TYPE: Record<string, string> = {
   "Image Resize/Upscale": "image_resize",
+  "Image Format Converter": "format_converter",
+  "Video Format Converter": "format_converter",
 };
 
 const CATEGORIES = Object.keys(JOB_CATEGORIES);

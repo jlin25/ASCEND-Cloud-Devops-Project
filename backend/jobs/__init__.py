@@ -4,6 +4,7 @@ from .jobs import (
     ExtractAudioJob,
     VideoQualityJob,
     ImageResizeJob,
+    FormatConverterJob,
     JobRequest,
     job_adapter,
 )
@@ -16,4 +17,5 @@ __all__ = [
     "job_adapter",
     "VideoQualityJob",
     "ImageResizeJob",
+    "FormatConverterJob",
 ]

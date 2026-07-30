@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 from typing import Literal, Annotated
 
+VIDEO_FORMATS = {"mp4", "mov", "avi", "webm"}
+IMAGE_FORMATS = {"jpg", "png", "webp"}
 
 class TranscodeJob(BaseModel):
     type: Literal["transcode"]
@@ -34,9 +36,25 @@ class ImageResizeJob(BaseModel):
     width: int
     height: int
 
+class FormatConverterJob(BaseModel):
+    type: Literal["format_converter"]
+    file_url: str
+    input_format: Literal["mp4", "mov", "avi", "webm", "jpg", "png", "webp"]
+    output_format: Literal["mp4", "mov", "avi", "webm", "jpg", "png", "webp"]
+
+    @model_validator(mode="after")
+    def validate_formats(self):
+        input_is_video = self.input_format in VIDEO_FORMATS
+        output_is_video = self.output_format in VIDEO_FORMATS
+        if input_is_video != output_is_video:
+            raise ValueError(f"Cannot convert between video and image formats: {self.input_format} -> {self.output_format}")
+        if self.input_format == self.output_format:
+            raise ValueError(f"Input and output formats are the same: {self.input_format}")
+        return self
+
 
 JobRequest = Annotated[
-    TranscodeJob | TrimJob | ExtractAudioJob | VideoQualityJob | ImageResizeJob,
+    TranscodeJob | TrimJob | ExtractAudioJob | VideoQualityJob | ImageResizeJob | FormatConverterJob,
     Field(discriminator="type"),
 ]
 job_adapter = TypeAdapter(JobRequest)
