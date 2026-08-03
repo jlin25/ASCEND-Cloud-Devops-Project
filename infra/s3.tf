@@ -1,5 +1,9 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_s3_bucket" "file_storage" {
-    bucket = "${var.project_name}-file-storage"
+    # S3 bucket names are globally unique across ALL AWS accounts, so the
+    # account id is appended to avoid colliding with someone else's bucket.
+    bucket = "${var.project_name}-file-storage-${data.aws_caller_identity.current.account_id}"
     force_destroy = false
 }
 
