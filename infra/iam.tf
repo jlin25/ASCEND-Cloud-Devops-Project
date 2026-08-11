@@ -29,6 +29,18 @@ data "aws_iam_policy_document" "jobs_access" {
       "${aws_s3_bucket.file_storage.arn}/*",
     ]
   }
+
+  # Transcribe jobs are created dynamically with names our code picks, so
+  # unlike SQS/S3 above there's no ARN to scope down to ahead of time.
+  statement {
+    sid    = "TranscribeAccess"
+    effect = "Allow"
+    actions = [
+      "transcribe:StartTranscriptionJob",
+      "transcribe:GetTranscriptionJob",
+    ]
+    resources = ["*"]
+  }
 }
 
 resource "aws_iam_policy" "jobs_access" {
