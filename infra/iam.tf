@@ -87,6 +87,12 @@ resource "aws_ssm_parameter" "aws_region" {
   value = var.aws_region
 }
 
+resource "aws_ssm_parameter" "bucket_name" {
+  name  = "/${var.project_name}/bucket_name"
+  type  = "String"
+  value = aws_s3_bucket.file_storage.bucket
+}
+
 resource "aws_ssm_parameter" "db_url" {
   name  = "/${var.project_name}/db_url"
   type  = "SecureString"
