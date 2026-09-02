@@ -35,8 +35,18 @@ class ImageResizeJob(BaseModel):
     height: int
 
 
+class TranscribeJob(BaseModel):
+    type: Literal["transcribe"]
+    file_url: str
+
+
 JobRequest = Annotated[
-    TranscodeJob | TrimJob | ExtractAudioJob | VideoQualityJob | ImageResizeJob,
+    TranscodeJob
+    | TrimJob
+    | ExtractAudioJob
+    | VideoQualityJob
+    | ImageResizeJob
+    | TranscribeJob,
     Field(discriminator="type"),
 ]
 job_adapter = TypeAdapter(JobRequest)
