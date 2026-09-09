@@ -17,12 +17,15 @@ function basename(key: string) {
 }
 
 const JOB_CATEGORIES: Record<string, string[]> = {
+  "Video Editing": ["Video Upscale", "Format Converter", "Subtitle Generator", "AI Voiceover"],
+  "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement", "Deblur"],
   "Video Editing": ["Video Upscale", "Video Format Converter", "Subtitle Generator", "AI Voiceover"],
   "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement", "Image Format Converter"],
 };
 
 const TASK_TYPE: Record<string, string> = {
   "Image Resize/Upscale": "image_resize",
+  "Deblur": "deblur",
   "Image Format Converter": "format_converter",
   "Video Format Converter": "format_converter",
 };
@@ -112,12 +115,12 @@ export default function DashboardPage() {
 
     try {
       const { file_key } = await api.upload(file);
-      await api.createTask({
-        type: "image_resize",
-        file_url: file_key,
-        width: Number(width),
-        height: Number(height),
-      });
+      const type = TASK_TYPE[task];
+      await api.createTask(
+        type === "image_resize"
+          ? { type, file_url: file_key, width: Number(width), height: Number(height) }
+          : { type, file_url: file_key }
+      );
       setFile(null);
       alert("Job submitted!");
       await refreshJobs();

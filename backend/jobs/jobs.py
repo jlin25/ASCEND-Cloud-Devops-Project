@@ -38,6 +38,8 @@ class ImageResizeJob(BaseModel):
     height: int
 
 
+class DeblurJob(BaseModel):
+    type: Literal["deblur"]
 class FormatConverterJob(BaseModel):
     type: Literal["format_converter"]
     file_url: str
@@ -79,6 +81,7 @@ JobRequest = Annotated[
     | ExtractAudioJob
     | VideoQualityJob
     | ImageResizeJob
+    | DeblurJob,
     | FormatConverterJob
     | TranscribeJob,
     Field(discriminator="type"),

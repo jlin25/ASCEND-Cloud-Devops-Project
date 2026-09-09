@@ -202,6 +202,16 @@ export interface components {
             /** Height */
             height: number;
         };
+        /** DeblurJob */
+        DeblurJob: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "deblur";
+            /** File Url */
+            file_url: string;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Username */
@@ -442,7 +452,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TranscodeJob"] | components["schemas"]["TrimJob"] | components["schemas"]["ExtractAudioJob"] | components["schemas"]["VideoQualityJob"] | components["schemas"]["ImageResizeJob"];
+                "application/json": components["schemas"]["TranscodeJob"] | components["schemas"]["TrimJob"] | components["schemas"]["ExtractAudioJob"] | components["schemas"]["VideoQualityJob"] | components["schemas"]["ImageResizeJob"] | components["schemas"]["DeblurJob"];
             };
         };
         responses: {
