@@ -13,6 +13,7 @@ from jobs import (
     VideoQualityJob,
     ImageResizeJob,
     DeblurJob,
+    FormatConverterJob,
     job_adapter,
 )
 from s3_client import S3Client
@@ -175,13 +176,86 @@ def process_image_resize(job: ImageResizeJob, user_id: str) -> str:
         os.remove(src_path)
         os.remove(dst_path)
 
+def convert_format(job: FormatConverterJob, user_id: str) -> str:
+    src_suffix = f".{job.input_format}"
+    dst_suffix = f".{job.output_format}"
+
+    src_fd, src_path = tempfile.mkstemp(suffix=src_suffix)
+    dst_fd, dst_path = tempfile.mkstemp(suffix=dst_suffix)
+    os.close(dst_fd)
+    try:
+        with os.fdopen(src_fd, "wb") as src:
+            body = s3.download_stream(job.file_url)
+            for chunk in body.iter_chunks():
+                src.write(chunk)
+
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", src_path, dst_path],
+            check=True,
+            capture_output=True,
+        )
+
+        content_type = mimetypes.guess_type(dst_path)[0] or "application/octet-stream"
+        filename = os.path.basename(job.file_url)
+        with open(dst_path, "rb") as out:
+            return s3.upload_stream(
+                user_id, filename, out, content_type, prefix="processed"
+            )
+    finally:
+        os.remove(src_path)
+        os.remove(dst_path)
+
+
+
+def process_trim(job: TrimJob, user_id: str) -> str:
+    suffix = os.path.splitext(job.file_url)[1] or ".mp4"
+
+    src_fd, src_path = tempfile.mkstemp(suffix=suffix)
+    dst_fd, dst_path = tempfile.mkstemp(suffix=suffix)
+    os.close(dst_fd)
+    try:
+        with os.fdopen(src_fd, "wb") as src:
+            body = s3.download_stream(job.file_url)
+            for chunk in body.iter_chunks():
+                src.write(chunk)
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                src_path,
+                "-ss",
+                str(job.start_seconds),
+                "-to",
+                str(job.end_seconds),
+                "-c",
+                "copy",
+                dst_path,
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+        content_type = (
+            mimetypes.guess_type(job.file_url)[0] or "application/octet-stream"
+        )
+        filename = os.path.basename(job.file_url)
+        with open(dst_path, "rb") as out:
+            return s3.upload_stream(
+                user_id, filename, out, content_type, prefix="processed"
+            )
+    finally:
+        os.remove(src_path)
+        os.remove(dst_path)
+
 
 def handle(job: JobRequest, user_id: str) -> str | None:
     match job:
         case TranscodeJob():
             pass  # transcode logic here
         case TrimJob():
-            pass  # trim logic here
+            return process_trim(job, user_id)
         case ExtractAudioJob():
             pass  # extract audio logic here
         case VideoQualityJob():
@@ -190,6 +264,8 @@ def handle(job: JobRequest, user_id: str) -> str | None:
             return process_image_resize(job, user_id)
         case DeblurJob():
             return process_image_deblur(job, user_id)
+        case FormatConverterJob():
+            return convert_format(job, user_id)
         case _:
             assert_never(job)
 

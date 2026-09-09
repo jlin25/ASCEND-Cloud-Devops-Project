@@ -16,16 +16,18 @@ function basename(key: string) {
   return key.split("/").pop() ?? key;
 }
 
-
-
 const JOB_CATEGORIES: Record<string, string[]> = {
   "Video Editing": ["Video Upscale", "Format Converter", "Subtitle Generator", "AI Voiceover"],
   "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement", "Deblur"],
+  "Video Editing": ["Video Upscale", "Video Format Converter", "Subtitle Generator", "AI Voiceover"],
+  "Photo Editing": ["Image Resize/Upscale", "Background Removal", "Image Enhancement", "Image Format Converter"],
 };
 
 const TASK_TYPE: Record<string, string> = {
   "Image Resize/Upscale": "image_resize",
   "Deblur": "deblur",
+  "Image Format Converter": "format_converter",
+  "Video Format Converter": "format_converter",
 };
 
 const CATEGORIES = Object.keys(JOB_CATEGORIES);
@@ -79,7 +81,6 @@ export default function DashboardPage() {
       setViewingId(null);
     }
   }
-
 
   function handleCategoryChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const nextCategory = e.target.value;
@@ -167,11 +168,11 @@ export default function DashboardPage() {
           <div className="dash-stats">
             <div className="dash-stat-card">
               <p className="dash-stat-label">Jobs Run</p>
-              <p className="dash-stat-value">24</p>
+              <p className="dash-stat-value">{jobs.length}</p>
             </div>
             <div className="dash-stat-card">
               <p className="dash-stat-label">Files Processed</p>
-              <p className="dash-stat-value">138</p>
+              <p className="dash-stat-value">{jobs.filter((j) => j.status === "done").length}</p>
             </div>
             <div className="dash-stat-card">
               <p className="dash-stat-label">Credits Remaining</p>
