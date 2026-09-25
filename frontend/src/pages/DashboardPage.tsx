@@ -61,7 +61,7 @@ export default function DashboardPage() {
     <div className="dash-root">
       {/* Nav */}
       <nav className="dash-nav">
-        <span className="dash-logo">ASCEND</span>
+        <button className="dash-logo" onClick={() => navigate("/")}>ASCEND</button>
         <div className="dash-nav-right">
           <span className="dash-username">{username}</span>
           <button className="dash-logout" onClick={handleLogout}>Logout</button>

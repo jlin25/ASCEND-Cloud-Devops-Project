@@ -1,0 +1,48 @@
+.notfound-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 12px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.10), transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(129, 140, 248, 0.08), transparent 40%),
+    #0f172a;
+  color: white;
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: center;
+  padding: 24px;
+}
+
+.notfound-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.notfound-title {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.notfound-sub {
+  color: #94a3b8;
+  margin: 0 0 12px;
+}
+
+.notfound-home-btn {
+  background: #38bdf8;
+  color: #0f172a;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 22px;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+
+.notfound-home-btn:hover {
+  background: #7dd3fc;
+}
