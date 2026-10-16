@@ -3,6 +3,9 @@ import mimetypes
 import os
 import subprocess
 import tempfile
+import threading
+import time
+from contextvars import ContextVar
 from job_queue import JobQueue
 from db.client import database
 from jobs import (
@@ -14,6 +17,7 @@ from jobs import (
     ImageResizeJob,
     DeblurJob,
     FormatConverterJob,
+    TranscribeJob,
     job_adapter,
 )
 from s3_client import S3Client
@@ -41,6 +45,98 @@ deblur_net = cv2.dnn.readNet(deblur_model_path)
 # PermissionError ("Error opening input: Permission denied" from ffmpeg).
 # mkstemp lets us close our handle before ffmpeg ever touches the file.
 
+# --- Visibility heartbeat ----------------------------------------------------
+# SQS hides a received message for the queue's visibility timeout (60s in
+# infra/variables.tf); if the job isn't finished by then, another worker picks
+# it up too. While a job is visibly making progress we keep pushing that
+# deadline out. A job that stops progressing (hung ffmpeg, stuck download)
+# stops being extended, so SQS redelivers it once the current timeout lapses.
+VISIBILITY_EXTENSION_SECONDS = int(os.getenv("VISIBILITY_EXTENSION_SECONDS", "60"))
+HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("HEARTBEAT_INTERVAL_SECONDS", "20"))
+STALL_TIMEOUT_SECONDS = int(os.getenv("STALL_TIMEOUT_SECONDS", "60"))
+# The deblur model is a single opaque forward() call with no progress to
+# observe, so it gets a fixed grace period instead.
+DEBLUR_GRACE_SECONDS = int(os.getenv("DEBLUR_GRACE_SECONDS", "600"))
+
+
+class Heartbeat:
+    """Extends a message's visibility for as long as beat() keeps being called."""
+
+    def __init__(self, receipt_handle: str):
+        self.receipt_handle = receipt_handle
+        self._last_beat = time.monotonic()
+        self._grace_until = 0.0
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def beat(self, grace: float = 0) -> None:
+        """Record progress. `grace` covers a step whose progress can't be seen."""
+        now = time.monotonic()
+        self._last_beat = now
+        self._grace_until = max(self._grace_until, now + grace)
+
+    def progressing(self) -> bool:
+        now = time.monotonic()
+        return now - self._last_beat < STALL_TIMEOUT_SECONDS or now < self._grace_until
+
+    def _run(self) -> None:
+        while not self._stop.wait(HEARTBEAT_INTERVAL_SECONDS):
+            if not self.progressing():
+                print("no progress seen, letting message visibility lapse")
+                return
+            try:
+                queue.extend(self.receipt_handle, VISIBILITY_EXTENSION_SECONDS)
+            except Exception as e:
+                print(f"failed to extend message visibility: {e}")
+
+    def __enter__(self):
+        self._token = _heartbeat.set(self)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        self._thread.join()
+        _heartbeat.reset(self._token)
+
+
+_heartbeat: ContextVar[Heartbeat | None] = ContextVar("heartbeat", default=None)
+
+
+def beat(grace: float = 0) -> None:
+    """Report progress on the current job (no-op outside a Heartbeat)."""
+    hb = _heartbeat.get()
+    if hb is not None:
+        hb.beat(grace)
+
+
+def download(key: str, fd: int) -> None:
+    """Stream an S3 object into an open mkstemp fd, beating per chunk."""
+    with os.fdopen(fd, "wb") as dst:
+        for chunk in s3.download_stream(key).iter_chunks():
+            dst.write(chunk)
+            beat()
+
+
+def run_ffmpeg(args: list[str]) -> None:
+    """Run ffmpeg, beating whenever its reported output position advances.
+
+    Raises CalledProcessError (with ffmpeg's stderr) on a non-zero exit so the
+    run loop marks the job failed.
+    """
+    cmd = ["ffmpeg", "-y", "-nostats", "-loglevel", "error", "-progress", "pipe:1", *args]
+    with tempfile.TemporaryFile() as err:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err, text=True)
+        last_position = None
+        for line in proc.stdout:
+            key, _, value = line.strip().partition("=")
+            if key == "out_time_us" and value != last_position:
+                last_position = value
+                beat()
+        if proc.wait() != 0:
+            err.seek(0)
+            raise subprocess.CalledProcessError(proc.returncode, cmd, stderr=err.read())
+
 
 def process_video_quality(job: VideoQualityJob, user_id: str) -> str:
     height = _HEIGHT[job.resolution]
@@ -50,15 +146,10 @@ def process_video_quality(job: VideoQualityJob, user_id: str) -> str:
     dst_fd, dst_path = tempfile.mkstemp(suffix=".mp4")
     os.close(dst_fd)
     try:
-        with os.fdopen(src_fd, "wb") as src:
-            body = s3.download_stream(job.file_url)
-            for chunk in body.iter_chunks():
-                src.write(chunk)
+        download(job.file_url, src_fd)
 
-        subprocess.run(
+        run_ffmpeg(
             [
-                "ffmpeg",
-                "-y",
                 "-i",
                 src_path,
                 "-vf",
@@ -70,9 +161,7 @@ def process_video_quality(job: VideoQualityJob, user_id: str) -> str:
                 "-c:a",
                 "aac",
                 dst_path,
-            ],
-            check=True,
-            capture_output=True,
+            ]
         )
 
         filename = os.path.basename(job.file_url)
@@ -92,10 +181,7 @@ def process_image_deblur(job: DeblurJob, user_id: str) -> str:
     os.close(dst_fd)
 
     try:
-        with os.fdopen(src_fd, "wb") as src:
-            body = s3.download_stream(job.file_url)
-            for chunk in body.iter_chunks():
-                src.write(chunk)
+        download(job.file_url, src_fd)
         image = cv2.imread(src_path)
         if image is None:
             raise RuntimeError("Failed to read uploaded image.")
@@ -108,6 +194,7 @@ def process_image_deblur(job: DeblurJob, user_id: str) -> str:
             swapRB=True,
             crop=False,
         )
+        beat(grace=DEBLUR_GRACE_SECONDS)
         deblur_net.setInput(blob)
         output = deblur_net.forward()
         output = output.squeeze(0)
@@ -123,11 +210,7 @@ def process_image_deblur(job: DeblurJob, user_id: str) -> str:
         filename = os.path.basename(job.file_url)
         with open(dst_path, "rb") as out:
             return s3.upload_stream(
-                user_id=user_id,
-                filename=filename,
-                stream=out,
-                content_type=content_type,
-                prefix="processed",
+                user_id, filename, out, content_type, prefix="processed"
             )
     finally:
         if os.path.exists(src_path):
@@ -143,15 +226,10 @@ def process_image_resize(job: ImageResizeJob, user_id: str) -> str:
     dst_fd, dst_path = tempfile.mkstemp(suffix=suffix)
     os.close(dst_fd)
     try:
-        with os.fdopen(src_fd, "wb") as src:
-            body = s3.download_stream(job.file_url)
-            for chunk in body.iter_chunks():
-                src.write(chunk)
+        download(job.file_url, src_fd)
 
-        subprocess.run(
+        run_ffmpeg(
             [
-                "ffmpeg",
-                "-y",
                 "-i",
                 src_path,
                 "-vf",
@@ -159,9 +237,7 @@ def process_image_resize(job: ImageResizeJob, user_id: str) -> str:
                 "-update",
                 "1",
                 dst_path,
-            ],
-            check=True,
-            capture_output=True,
+            ]
         )
 
         content_type = (
@@ -184,16 +260,9 @@ def convert_format(job: FormatConverterJob, user_id: str) -> str:
     dst_fd, dst_path = tempfile.mkstemp(suffix=dst_suffix)
     os.close(dst_fd)
     try:
-        with os.fdopen(src_fd, "wb") as src:
-            body = s3.download_stream(job.file_url)
-            for chunk in body.iter_chunks():
-                src.write(chunk)
+        download(job.file_url, src_fd)
 
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", src_path, dst_path],
-            check=True,
-            capture_output=True,
-        )
+        run_ffmpeg(["-i", src_path, dst_path])
 
         content_type = mimetypes.guess_type(dst_path)[0] or "application/octet-stream"
         filename = os.path.basename(job.file_url)
@@ -214,15 +283,10 @@ def process_trim(job: TrimJob, user_id: str) -> str:
     dst_fd, dst_path = tempfile.mkstemp(suffix=suffix)
     os.close(dst_fd)
     try:
-        with os.fdopen(src_fd, "wb") as src:
-            body = s3.download_stream(job.file_url)
-            for chunk in body.iter_chunks():
-                src.write(chunk)
+        download(job.file_url, src_fd)
 
-        subprocess.run(
+        run_ffmpeg(
             [
-                "ffmpeg",
-                "-y",
                 "-i",
                 src_path,
                 "-ss",
@@ -232,9 +296,7 @@ def process_trim(job: TrimJob, user_id: str) -> str:
                 "-c",
                 "copy",
                 dst_path,
-            ],
-            check=True,
-            capture_output=True,
+            ]
         )
 
         content_type = (
@@ -250,14 +312,14 @@ def process_trim(job: TrimJob, user_id: str) -> str:
         os.remove(dst_path)
 
 
-def handle(job: JobRequest, user_id: str) -> str | None:
+def handle(job: JobRequest, user_id: str) -> str:
     match job:
         case TranscodeJob():
-            pass  # transcode logic here
+            raise NotImplementedError("transcode")
         case TrimJob():
             return process_trim(job, user_id)
         case ExtractAudioJob():
-            pass  # extract audio logic here
+            raise NotImplementedError("extract_audio")
         case VideoQualityJob():
             return process_video_quality(job, user_id)
         case ImageResizeJob():
@@ -266,6 +328,8 @@ def handle(job: JobRequest, user_id: str) -> str | None:
             return process_image_deblur(job, user_id)
         case FormatConverterJob():
             return convert_format(job, user_id)
+        case TranscribeJob():
+            raise NotImplementedError("transcribe")
         case _:
             assert_never(job)
 
@@ -273,7 +337,9 @@ def handle(job: JobRequest, user_id: str) -> str | None:
 def run():
     print("worker started, polling for jobs...")
     while True:
-        for msg in queue.receive():
+        # One at a time: messages fetched in a batch would sit unextended (and
+        # time out) while the ones ahead of them are processed.
+        for msg in queue.receive(max_messages=1):
             body = json.loads(msg["Body"])
             job_id = body["job_id"]
             user_id = body["user_id"]
@@ -282,7 +348,8 @@ def run():
                     "id", job_id
                 ).execute()
                 job = job_adapter.validate_python(body)
-                output_key = handle(job, user_id)
+                with Heartbeat(msg["ReceiptHandle"]):
+                    output_key = handle(job, user_id)
                 database.table("jobs").update(
                     {
                         "status": "done",

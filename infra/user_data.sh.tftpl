@@ -15,8 +15,8 @@ REPO_BRANCH="${repo_branch}"
 # aws-cli v2 ships preinstalled on Amazon Linux 2023.
 dnf update -y
 # AL2023's default python3 is 3.9, but the backend pins packages (e.g. anyio)
-# that need >=3.10, so install 3.11 explicitly and use it everywhere below.
-dnf install -y python3.11 python3.11-pip git tar xz
+# that need >=3.12 (numpy 2.5), so install 3.12 explicitly and use it everywhere below.
+dnf install -y python3.12 python3.12-pip git tar xz
 
 # ffmpeg isn't in the AL2023 core repos, so install a prebuilt static build
 # (John Van Sickle's, the standard source for Linux static ffmpeg). This is
@@ -52,7 +52,7 @@ chmod 600 /etc/ascend/worker.env
 if [ -n "$REPO_URL" ]; then
   rm -rf /opt/ascend
   git clone --branch "$REPO_BRANCH" --depth 1 "$REPO_URL" /opt/ascend
-  python3.11 -m pip install -r /opt/ascend/backend/requirements.txt
+  python3.12 -m pip install -r /opt/ascend/backend/requirements.txt
 
   cat > /etc/systemd/system/ascend-worker.service <<'UNIT'
 [Unit]
@@ -64,7 +64,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/opt/ascend/backend
 EnvironmentFile=/etc/ascend/worker.env
-ExecStart=/usr/bin/python3.11 worker.py
+ExecStart=/usr/bin/python3.12 worker.py
 Restart=always
 RestartSec=5
 

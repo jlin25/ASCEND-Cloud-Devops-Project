@@ -22,11 +22,11 @@ type RegisterBody =
 export type { CreateTaskBody, LoginBody, RegisterBody };
 
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
+  status: number;
+
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
     this.name = "ApiError";
   }
 }
@@ -94,7 +94,7 @@ export const api = {
   getTaskResult: (id: string) => request(`/tasks/${id}/result`),
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: "DELETE" }),
 
-  // Auth (currently stubbed server-side).
+  // Auth.
   login: (creds: LoginBody) =>
     request("/auth/login", { method: "POST", body: JSON.stringify(creds) }),
   register: (creds: RegisterBody) =>

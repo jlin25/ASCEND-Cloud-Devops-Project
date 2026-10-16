@@ -19,6 +19,7 @@ aws sts get-caller-identity        # must succeed, no ExpiredToken
 
 If you ever see "No valid credential sources found" when running Terraform,
 bridge the creds into the shell first:
+
 ```bash
 eval "$(aws configure export-credentials --format env)"
 ```
@@ -43,10 +44,12 @@ export TF_VAR_worker_branch="backend_integration"
 
 > ⚠️ `init.sh` APPENDS to `backend/.env`. Running it multiple times duplicates
 > keys and can leave stale (wrong-region) values. After re-running, verify:
+>
 > ```bash
 > grep -oE '^[A-Z_]+=' backend/.env | sort | uniq -c   # every key should show count 1
 > grep -E '^AWS_REGION=|^SQS_QUEUE_URL=' backend/.env    # must be us-east-2
 > ```
+>
 > If duplicated, delete the old lines (keep the last/us-east-2 set).
 
 ---
@@ -54,11 +57,13 @@ export TF_VAR_worker_branch="backend_integration"
 ## 2. Finish backend/.env
 
 Add the values `init.sh` can't provide:
+
 ```
 DB_URL=https://<your-ref>.supabase.co
 DB_SERVICE_KEY=<supabase key>
 SECRET_KEY=<random string — generate with: python3 -c "import secrets;print(secrets.token_hex(32))">
 ```
+
 Backend reads: `AWS_REGION`, `SQS_QUEUE_URL`, `S3_BUCKET_NAME`, `DB_URL`,
 `DB_SERVICE_KEY`, `SECRET_KEY`, plus the AWS keys.
 
@@ -100,7 +105,7 @@ TOKEN=$(curl -s $BASE/auth/register -H 'Content-Type: application/json' \
 KEY=$(curl -s $BASE/upload -H "Authorization: Bearer $TOKEN" \
   -F file=@sample.mp4 | jq -r .file_key)
 
-# submit a job (video_quality is the only fully-implemented type)
+# submit a job
 curl -s $BASE/tasks -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d "{\"type\":\"video_quality\",\"file_url\":\"$KEY\",\"resolution\":\"720p\"}"
 
@@ -112,13 +117,15 @@ curl -s $BASE/tasks/<task_id>/result -H "Authorization: Bearer $TOKEN"
 ```
 
 Expected: status goes `pending → processing → done`. Verify output resolution:
+
 ```bash
 ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 output.mp4
 # height should equal the requested resolution (720p → 720)
 ```
 
-Needs `jq` and a real `sample.mp4`. Only `video_quality` processes;
-`transcode`/`trim`/`extract_audio` enqueue but the worker no-ops them.
+Needs `jq` and a real `sample.mp4`. Implemented types: `video_quality`, `trim`,
+`image_resize`, `deblur`, `format_converter`. The API rejects `transcode`,
+`extract_audio` and `transcribe` with a 400 until the worker supports them.
 
 ---
 
@@ -146,9 +153,11 @@ terraform destroy            # or: ./infra/init.sh destroy
 ```
 
 Confirm it's fully gone:
+
 ```bash
 terraform state list                                   # empty
 aws s3 ls | grep ascend || echo "no buckets"
 aws sqs list-queues --region us-east-2 --query QueueUrls --output text | grep ascend || echo "no queues"
 ```
+
 `terraform destroy` also prints `Destroy complete! Resources: N destroyed.`

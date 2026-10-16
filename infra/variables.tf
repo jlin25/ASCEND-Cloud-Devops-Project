@@ -52,6 +52,13 @@ variable "worker_repo_url" {
   description = "Git URL of this repo. If set, user_data clones it and runs worker.py as a systemd service. Leave empty to provision the box without deploying code."
   type        = string
   default     = ""
+
+  # The instance has no SSH key or token, so only an https:// clone of a
+  # public repo works; a git@ URL fails at boot with no visible error.
+  validation {
+    condition     = var.worker_repo_url == "" || startswith(var.worker_repo_url, "https://")
+    error_message = "worker_repo_url must be an https:// URL (the worker has no SSH key to clone with)."
+  }
 }
 
 variable "worker_branch" {

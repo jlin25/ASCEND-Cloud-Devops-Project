@@ -1,26 +1,27 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import HomePage from "./pages/HomePage";
-import TutorialPage from "./pages/TutorialPage";
-import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
-import MarketplacePage from "./pages/MarketplacePage";
-import JobsPage from "./pages/JobsPage";
-import NotFoundPage from "./pages/NotFoundPage";
+import { useState } from "react";
+import Login from "./Login";
+import Dashboard from "./Dashboard";
 
-function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/tutorial" element={<TutorialPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/marketplace" element={<MarketplacePage />} />
-        <Route path="/jobs" element={<JobsPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </BrowserRouter>
+export default function App() {
+  const [username, setUsername] = useState(() =>
+    localStorage.getItem("token") ? localStorage.getItem("username") : null,
+  );
+
+  function handleLogin(token: string, name: string) {
+    localStorage.setItem("token", token);
+    localStorage.setItem("username", name);
+    setUsername(name);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    setUsername(null);
+  }
+
+  return username ? (
+    <Dashboard username={username} onLogout={handleLogout} />
+  ) : (
+    <Login onLogin={handleLogin} />
   );
 }
-
-export default App;

@@ -16,11 +16,11 @@ class JobQueue:
             MessageBody=json.dumps(body),
         )
 
-    def receive(self) -> list[dict]:
-        """Consumer: long-poll for up to 10 messages, waiting up to 20s."""
+    def receive(self, max_messages: int = 10) -> list[dict]:
+        """Consumer: long-poll for up to `max_messages` messages, waiting up to 20s."""
         resp = self.sqs.receive_message(
             QueueUrl=self.queue_url,
-            MaxNumberOfMessages=10,
+            MaxNumberOfMessages=max_messages,
             WaitTimeSeconds=20,
             AttributeNames=["ApproximateReceiveCount"],
         )
@@ -31,4 +31,12 @@ class JobQueue:
         self.sqs.delete_message(
             QueueUrl=self.queue_url,
             ReceiptHandle=receipt_handle,
+        )
+
+    def extend(self, receipt_handle: str, seconds: int) -> None:
+        """Heartbeat: keep an in-flight message hidden for another `seconds`."""
+        self.sqs.change_message_visibility(
+            QueueUrl=self.queue_url,
+            ReceiptHandle=receipt_handle,
+            VisibilityTimeout=seconds,
         )

@@ -1,5 +1,6 @@
-# Least-privilege policy: the app can ONLY send/receive/delete on these two
-# queues. It deliberately cannot create/delete queues — that's Terraform's job.
+# Least-privilege policy: the app can ONLY send/receive/delete (and extend the
+# visibility of) messages on these two queues. It deliberately cannot
+# create/delete queues — that's Terraform's job.
 data "aws_iam_policy_document" "jobs_access" {
   statement {
     sid    = "JobQueueAccess"
@@ -8,6 +9,7 @@ data "aws_iam_policy_document" "jobs_access" {
       "sqs:SendMessage",
       "sqs:ReceiveMessage",
       "sqs:DeleteMessage",
+      "sqs:ChangeMessageVisibility",
       "sqs:GetQueueAttributes",
     ]
     resources = [

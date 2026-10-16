@@ -12,9 +12,19 @@ router = APIRouter()
 queue = JobQueue()
 s3 = S3Client()
 
+# Job types the worker can actually process (see worker.handle). The rest exist
+# in the schema but would only fail in the worker, so reject them up front.
+SUPPORTED_JOB_TYPES = {"trim", "video_quality", "image_resize", "deblur", "format_converter"}
+
 @router.post("/tasks")
 async def create_task(job: JobRequest, current_user: User = Depends(get_current_user)):
     user_id = current_user.id
+    if job.type not in SUPPORTED_JOB_TYPES:
+        raise HTTPException(status_code=400, detail=f"'{job.type}' jobs aren't supported yet")
+    # file_url is client-supplied: only allow keys from this user's own uploads,
+    # otherwise they could process (and, via DELETE, remove) other users' files.
+    if not job.file_url.startswith(f"uploads/{user_id}/"):
+        raise HTTPException(status_code=403, detail="file_url must be one of your own uploads")
     response = (
         database.table("jobs")
         .insert(
@@ -65,7 +75,7 @@ async def get_task_result(task_id: str, current_user : User = Depends(get_curren
         .execute()
     )
 
-    if not response.data or not response.data[0]:
+    if not response.data or not response.data[0]["output_key"]:
         raise HTTPException(status_code=404, detail="File not ready yet")
     else:
         url = s3.get_output_url(response.data[0]["output_key"])

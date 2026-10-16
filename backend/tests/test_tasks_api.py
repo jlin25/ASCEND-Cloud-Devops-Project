@@ -18,17 +18,29 @@ class FakeResult:
 
 
 class FakeTable:
-    """Minimal supabase-py table chain: .insert(row).execute()."""
+    """Minimal supabase-py table chain: .insert(row).execute(), and
+    .select(...).eq(...).execute() returning `rows`."""
 
     def __init__(self, insert_id="job-123"):
         self.insert_id = insert_id
         self.inserted = None
+        self.rows = []
+        self.selecting = False
 
     def insert(self, row):
         self.inserted = row
         return self
 
+    def select(self, *columns):
+        self.selecting = True
+        return self
+
+    def eq(self, column, value):
+        return self
+
     def execute(self):
+        if self.selecting:
+            return FakeResult(self.rows)
         return FakeResult([{"id": self.insert_id}])
 
 
@@ -104,6 +116,47 @@ def test_create_task_rejects_bad_resolution(client):
         json={"type": "video_quality", "file_url": "k", "resolution": "480p"},
     )
     assert resp.status_code == 422
+
+
+def test_create_task_rejects_other_users_file(client, fake_queue, fake_db):
+    resp = client.post(
+        "/tasks",
+        json={"type": "video_quality", "file_url": "uploads/u2/a.mp4", "resolution": "720p"},
+    )
+    assert resp.status_code == 403
+    assert fake_db.jobs.inserted is None
+    assert fake_queue.messages == []
+
+
+def test_create_task_rejects_prefix_lookalike(client):
+    # "uploads/u1x/..." starts with "uploads/u1" but belongs to user u1x.
+    resp = client.post(
+        "/tasks",
+        json={"type": "video_quality", "file_url": "uploads/u1x/a.mp4", "resolution": "720p"},
+    )
+    assert resp.status_code == 403
+
+
+def test_create_task_rejects_unimplemented_type(client, fake_queue):
+    resp = client.post(
+        "/tasks",
+        json={"type": "transcode", "file_url": "uploads/u1/a.mp4", "format": "mp4", "resolution": "720p"},
+    )
+    assert resp.status_code == 400
+    assert fake_queue.messages == []
+
+
+def test_result_404_when_job_has_no_output(client, fake_db):
+    fake_db.jobs.rows = [{"output_key": None}]
+    resp = client.get("/tasks/job-123/result")
+    assert resp.status_code == 404
+
+
+def test_result_returns_presigned_url(client, fake_db, monkeypatch):
+    fake_db.jobs.rows = [{"output_key": "processed/u1/out.mp4"}]
+    monkeypatch.setattr(tasks_module.s3, "get_output_url", lambda key: f"https://signed/{key}")
+    resp = client.get("/tasks/job-123/result")
+    assert resp.json() == {"output_file_url": "https://signed/processed/u1/out.mp4"}
 
 
 def test_tasks_requires_auth():

@@ -168,6 +168,16 @@ export interface components {
             /** File */
             file: string;
         };
+        /** DeblurJob */
+        DeblurJob: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "deblur";
+            /** File Url */
+            file_url: string;
+        };
         /** ExtractAudioJob */
         ExtractAudioJob: {
             /**
@@ -182,6 +192,26 @@ export interface components {
              * @enum {string}
              */
             format: "mp3" | "wav" | "aac";
+        };
+        /** FormatConverterJob */
+        FormatConverterJob: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "format_converter";
+            /** File Url */
+            file_url: string;
+            /**
+             * Input Format
+             * @enum {string}
+             */
+            input_format: "mp4" | "mov" | "avi" | "webm" | "jpg" | "png" | "webp";
+            /**
+             * Output Format
+             * @enum {string}
+             */
+            output_format: "mp4" | "mov" | "avi" | "webm" | "jpg" | "png" | "webp";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -201,16 +231,6 @@ export interface components {
             width: number;
             /** Height */
             height: number;
-        };
-        /** DeblurJob */
-        DeblurJob: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "deblur";
-            /** File Url */
-            file_url: string;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -245,6 +265,16 @@ export interface components {
              * @enum {string}
              */
             resolution: "720p" | "1080p" | "4k";
+        };
+        /** TranscribeJob */
+        TranscribeJob: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "transcribe";
+            /** File Url */
+            file_url: string;
         };
         /** TrimJob */
         TrimJob: {
@@ -452,7 +482,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TranscodeJob"] | components["schemas"]["TrimJob"] | components["schemas"]["ExtractAudioJob"] | components["schemas"]["VideoQualityJob"] | components["schemas"]["ImageResizeJob"] | components["schemas"]["DeblurJob"];
+                "application/json": components["schemas"]["TranscodeJob"] | components["schemas"]["TrimJob"] | components["schemas"]["ExtractAudioJob"] | components["schemas"]["VideoQualityJob"] | components["schemas"]["ImageResizeJob"] | components["schemas"]["DeblurJob"] | components["schemas"]["FormatConverterJob"] | components["schemas"]["TranscribeJob"];
             };
         };
         responses: {
