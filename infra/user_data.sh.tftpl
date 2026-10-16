@@ -38,6 +38,9 @@ ffmpeg -version | head -1
 param() { aws ssm get-parameter --region "$REGION" --name "$1" $${2:-} --query Parameter.Value --output text; }
 
 mkdir -p /etc/ascend
+# Tracing off while secrets are in play: `set -x` would echo the decrypted
+# DB_SERVICE_KEY into the EC2 console log, readable via GetConsoleOutput.
+set +x
 {
   echo "AWS_REGION=$REGION"
   echo "SQS_QUEUE_URL=$(param "$PREFIX/queue_url")"
@@ -47,6 +50,7 @@ mkdir -p /etc/ascend
   echo "DB_SERVICE_KEY=$(param "$PREFIX/db_service_key" --with-decryption)"
 } > /etc/ascend/worker.env
 chmod 600 /etc/ascend/worker.env
+set -x
 
 # --- 3. Deploy + run the worker (only if a repo URL was provided) ----------
 if [ -n "$REPO_URL" ]; then

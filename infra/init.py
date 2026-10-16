@@ -21,6 +21,7 @@ Usage (also runnable via ./infra/init.sh, which just execs this):
   ./infra/init.py            # provision + reconcile tfvars + .env
   ./infra/init.py env        # reconcile backend/.env only (skip provisioning)
   ./infra/init.py destroy    # tear everything down
+  ./infra/init.py destroy --keep-bucket   # tear down all but the S3 bucket
 """
 
 from __future__ import annotations
@@ -613,12 +614,30 @@ def clear_untracked_access_keys() -> None:
         run_ok(["aws", "iam", "delete-access-key", "--user-name", user_name, "--access-key-id", key_id])
 
 
-def destroy() -> None:
+# Everything in s3.tf. Dropping these from state (rather than destroying them)
+# leaves the bucket and its files in AWS; the next `./infra/init.sh` re-imports
+# the bucket via adopt_orphans() and re-applies the settings resources.
+BUCKET_ADDRESSES = (
+    "aws_s3_bucket.file_storage",
+    "aws_s3_bucket_versioning.file_storage_versioning",
+    "aws_s3_bucket_server_side_encryption_configuration.file_storage_encryption",
+    "aws_s3_bucket_public_access_block.file_storage_public_block",
+)
+
+
+def destroy(keep_bucket: bool = False) -> None:
     check_prereqs()
     auth()
     terraform("init", "-input=false")
     clear_untracked_access_keys()
-    log("Destroying all Terraform-managed infrastructure...")
+    if keep_bucket:
+        for address in BUCKET_ADDRESSES:
+            if terraform_ok("state", "list", address):
+                log(f"Keeping {address}: removing it from state so destroy skips it...")
+                terraform("state", "rm", address)
+        log("Destroying all Terraform-managed infrastructure except the S3 bucket...")
+    else:
+        log("Destroying all Terraform-managed infrastructure...")
     terraform("destroy")
 
 
@@ -629,7 +648,11 @@ def main(argv: list[str]) -> None:
     cmd = argv[1] if len(argv) > 1 else ""
 
     if cmd == "destroy":
-        destroy()
+        flags = argv[2:]
+        if flags not in ([], ["--keep-bucket"]):
+            err(f"Unknown destroy option(s): {' '.join(flags)}")
+            sys.exit(1)
+        destroy(keep_bucket=flags == ["--keep-bucket"])
     elif cmd in ("", "apply", "up"):
         check_prereqs()
         auth()
@@ -644,7 +667,7 @@ def main(argv: list[str]) -> None:
         populate_env()
     else:
         err(f"Unknown command: {cmd}")
-        print(f"Usage: {argv[0]} [apply|env|destroy]", file=sys.stderr)
+        print(f"Usage: {argv[0]} [apply|env|destroy [--keep-bucket]]", file=sys.stderr)
         sys.exit(1)
 
 

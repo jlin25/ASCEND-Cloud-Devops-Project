@@ -150,6 +150,7 @@ Needs `jq` and a real `sample.mp4`. Implemented types: `video_quality`, `trim`,
 cd infra
 eval "$(aws configure export-credentials --format env)"
 terraform destroy            # or: ./infra/init.sh destroy
+./init.sh destroy --keep-bucket          # everything except the S3 bucket (and its files)
 ```
 
 Confirm it's fully gone:

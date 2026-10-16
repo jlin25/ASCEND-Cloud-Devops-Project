@@ -7,5 +7,6 @@
 #   ./infra/init.sh            # provision + reconcile tfvars + .env
 #   ./infra/init.sh env        # reconcile backend/.env only
 #   ./infra/init.sh destroy    # tear everything down
+#   ./infra/init.sh destroy --keep-bucket   # ...except the S3 bucket
 set -euo pipefail
 exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/init.py" "$@"

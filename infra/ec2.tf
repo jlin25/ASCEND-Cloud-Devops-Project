@@ -8,13 +8,16 @@
 #   - be managed via Session Manager          (AmazonSSMManagedInstanceCore)
 
 # Latest Amazon Linux 2023 AMI for the region — avoids hardcoding an AMI id.
+# "al2023-ami-2023.*" deliberately excludes the al2023-ami-minimal-* images,
+# which a looser "al2023-ami-*" also matches: those have a 2 GB root disk
+# (pip runs out of space installing requirements) and no SSM agent.
 data "aws_ami" "al2023" {
   most_recent = true
   owners      = ["amazon"]
 
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["al2023-ami-2023.*-kernel-*-x86_64"]
   }
   filter {
     name   = "virtualization-type"
@@ -86,6 +89,13 @@ resource "aws_instance" "worker" {
   instance_type          = var.instance_type
   iam_instance_profile   = aws_iam_instance_profile.worker.name
   vpc_security_group_ids = [aws_security_group.worker.id]
+
+  # Python deps (opencv, numpy, ...), ffmpeg, the deblur model, and per-job
+  # temp files all land on the root disk. 30 GB is the free-tier ceiling.
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+  }
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     region      = var.aws_region
