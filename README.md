@@ -157,6 +157,7 @@ The platform combines a marketplace model with on-demand cloud computing to supp
 - Kevin Dang  
 - Princeden Hom  
 - Amber Wang  
+- Bryan Kudiabor
 
 ### Mentors
 
