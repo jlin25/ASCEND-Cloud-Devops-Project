@@ -27,8 +27,11 @@ export type JobType = (typeof JOB_TYPES)[number]["type"];
 
 export const LABELS: Record<string, string> = Object.fromEntries(JOB_TYPES.map((j) => [j.type, j.label]));
 
+// S3 keys look like uploads/<user>/<uuid>-<filename> (backend/s3_client.py);
+// strip the folders and the uuid prefix to get back the name the user uploaded.
 export function basename(key: string) {
-  return key.split("/").pop() ?? key;
+  const name = key.split("/").pop() ?? key;
+  return name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "") || name;
 }
 
 // created_at is a TIMESTAMP without time zone (UTC on the server), so the
