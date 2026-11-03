@@ -52,6 +52,8 @@ export default function Dashboard({ username, onLogout }: { username: string; on
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   // Bumped after each submit to remount the file input, so picking the same file again fires onChange.
   const [fileInputKey, setFileInputKey] = useState(0);
+  // Job whose delete button is armed; a second click deletes (it also removes the S3 files).
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const fail = useCallback(
     (err: unknown, prefix: string) => {
@@ -89,6 +91,18 @@ export default function Dashboard({ username, onLogout }: { username: string; on
     const id = setTimeout(() => setMessage(null), 4000);
     return () => clearTimeout(id);
   }, [message]);
+
+  // Disarm delete after a few seconds or on any click elsewhere.
+  useEffect(() => {
+    if (!confirmingId) return;
+    const disarm = () => setConfirmingId(null);
+    const id = setTimeout(disarm, 3000);
+    document.addEventListener("click", disarm);
+    return () => {
+      clearTimeout(id);
+      document.removeEventListener("click", disarm);
+    };
+  }, [confirmingId]);
 
   const ext = file ? extension(file.name) : "";
   const outputFormats = (VIDEO_FORMATS.includes(ext) ? VIDEO_FORMATS : IMAGE_FORMATS).filter((f) => f !== ext);
@@ -151,15 +165,28 @@ export default function Dashboard({ username, onLogout }: { username: string; on
   }
 
   async function handleDownload(id: string) {
+    // Open the tab during the click itself so popup blockers allow it, then
+    // point it at the presigned URL once the request comes back.
+    const tab = window.open("", "_blank");
     try {
       const data = (await api.getTaskResult(id)) as { output_file_url: string };
-      window.open(data.output_file_url, "_blank");
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = data.output_file_url;
+      } else {
+        window.open(data.output_file_url, "_blank", "noopener");
+      }
     } catch (err) {
+      tab?.close();
       fail(err, "Couldn't get result");
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    // Keep this click from reaching the document listener that disarms the button.
+    e.stopPropagation();
+    if (confirmingId !== id) return setConfirmingId(id);
+    setConfirmingId(null);
     try {
       await api.deleteTask(id);
       setJobs(jobs.filter((j) => j.id !== id));
@@ -266,8 +293,12 @@ export default function Dashboard({ username, onLogout }: { username: string; on
                         Download
                       </button>
                     )}
-                    <button className="link danger" onClick={() => handleDelete(job.id)} title="Delete">
-                      ✕
+                    <button
+                      className={`link danger${confirmingId === job.id ? " confirm" : ""}`}
+                      onClick={(e) => handleDelete(e, job.id)}
+                      title="Delete"
+                    >
+                      {confirmingId === job.id ? "Delete?" : "✕"}
                     </button>
                   </td>
                 </tr>

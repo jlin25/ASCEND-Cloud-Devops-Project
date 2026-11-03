@@ -89,8 +89,13 @@ button:disabled {
   color: var(--muted);
 }
 
-.link.danger:hover {
+.link.danger:hover,
+.link.danger.confirm {
   color: var(--danger);
+}
+
+.link.danger.confirm {
+  font-weight: 500;
 }
 
 .muted {
