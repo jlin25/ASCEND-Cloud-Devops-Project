@@ -11,11 +11,16 @@ export type Job = {
 
 // Only the job types the worker actually implements (see backend/worker.py).
 export const JOB_TYPES = [
-  { type: "image_resize", label: "Resize image", accept: "image/*" },
-  { type: "deblur", label: "Deblur image", accept: "image/*" },
-  { type: "trim", label: "Trim video", accept: "video/*" },
-  { type: "video_quality", label: "Change resolution", accept: "video/*" },
-  { type: "format_converter", label: "Convert format", accept: "image/*,video/*" },
+  { type: "image_resize", label: "Resize image", description: "Scale an image to an exact size", accept: "image/*" },
+  { type: "deblur", label: "Deblur image", description: "Sharpen a blurry photo", accept: "image/*" },
+  { type: "trim", label: "Trim video", description: "Keep only part of a video", accept: "video/*" },
+  { type: "video_quality", label: "Change resolution", description: "Re-encode at 720p, 1080p or 4K", accept: "video/*" },
+  {
+    type: "format_converter",
+    label: "Convert format",
+    description: "Change an image or video's file type",
+    accept: "image/*,video/*",
+  },
 ] as const;
 
 export type JobType = (typeof JOB_TYPES)[number]["type"];

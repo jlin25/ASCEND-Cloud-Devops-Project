@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { basename, LABELS, parseUtc, type Job } from "./jobs";
+import { basename, LABELS, parseUtc, timeAgo, type Job } from "./jobs";
 
 function initials(name: string) {
   const parts = name.split(/[\s._-]+/).filter(Boolean);
@@ -62,10 +62,15 @@ export default function Sidebar({ username, jobs, selectedId, open, onSelect, on
               key={job.id}
               className={`side-item${job.id === selectedId ? " active" : ""}`}
               onClick={() => onSelect(job.id)}
-              title={`${LABELS[job.job_type] ?? job.job_type} · ${job.status} · ${parseUtc(job.created_at).toLocaleString()}`}
+              title={`${basename(job.input_key)} · ${job.status} · ${parseUtc(job.created_at).toLocaleString()}`}
             >
               <span className={`dot ${job.status}`} />
-              <span className="side-name">{basename(job.input_key)}</span>
+              <span className="side-text">
+                <span className="side-name">{basename(job.input_key)}</span>
+                <span className="side-meta muted">
+                  {LABELS[job.job_type] ?? job.job_type} · {timeAgo(parseUtc(job.created_at))}
+                </span>
+              </span>
             </button>
           ))
         )}

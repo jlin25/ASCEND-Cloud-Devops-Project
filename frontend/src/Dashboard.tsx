@@ -79,6 +79,14 @@ export default function Dashboard({ username, onLogout }: { username: string; on
   }, []);
 
   const selectedJob = jobs.find((j) => j.id === selectedId);
+  const jobType = JOB_TYPES.find((j) => j.type === type)!;
+
+  // Keep the chosen file when switching job type only if the new type accepts it.
+  function changeType(next: JobType) {
+    const accept = JOB_TYPES.find((j) => j.type === next)!.accept;
+    if (file && !accept.split(",").some((a) => file.type.startsWith(a.replace("*", "")))) setFile(null);
+    setType(next);
+  }
 
   function select(id: string | null) {
     setSelectedId(id);
@@ -200,63 +208,102 @@ export default function Dashboard({ username, onLogout }: { username: string; on
           <JobDetail key={selectedJob.id} job={selectedJob} onDownload={handleDownload} onDelete={handleDelete} />
         ) : (
           <>
-            <h1 className="page-title">New job</h1>
+            <div>
+              <h1 className="page-title">New job</h1>
+              <p className="muted">Pick what to do, add a file and press Run. Your uploads appear on the left.</p>
+            </div>
             <form className="card submit" onSubmit={handleSubmit}>
-              <select value={type} onChange={(e) => setType(e.target.value as JobType)}>
-                {JOB_TYPES.map((j) => (
-                  <option key={j.type} value={j.type}>
-                    {j.label}
-                  </option>
-                ))}
-              </select>
-
-              <label className="file">
-                <input
-                  key={`${type}-${fileInputKey}`}
-                  type="file"
-                  accept={JOB_TYPES.find((j) => j.type === type)?.accept}
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
-                {file ? file.name : "Choose file…"}
-              </label>
-
-              {type === "image_resize" && (
-                <>
-                  <input className="num" type="number" min={1} value={params.width} onChange={set("width")} title="Width" />
-                  <span className="muted">×</span>
-                  <input className="num" type="number" min={1} value={params.height} onChange={set("height")} title="Height" />
-                </>
-              )}
-              {type === "trim" && (
-                <>
-                  <input className="num" type="number" min={0} step="any" value={params.start} onChange={set("start")} title="Start (s)" />
-                  <span className="muted">to</span>
-                  <input className="num" type="number" min={0} step="any" value={params.end} onChange={set("end")} title="End (s)" />
-                  <span className="muted">s</span>
-                </>
-              )}
-              {type === "video_quality" && (
-                <select value={params.resolution} onChange={set("resolution")}>
-                  {RESOLUTIONS.map((r) => (
-                    <option key={r}>{r}</option>
+              <div className="field">
+                <span className="field-label">1. What do you want to do?</span>
+                <div className="type-grid">
+                  {JOB_TYPES.map((j) => (
+                    <button
+                      key={j.type}
+                      type="button"
+                      className={`type-option${type === j.type ? " active" : ""}`}
+                      onClick={() => changeType(j.type)}
+                    >
+                      <span className="type-name">{j.label}</span>
+                      <span className="muted">{j.description}</span>
+                    </button>
                   ))}
-                </select>
-              )}
-              {type === "format_converter" && file && (
-                <>
-                  <span className="muted">.{ext} →</span>
-                  <select value={output} onChange={set("output")}>
-                    {outputFormats.map((f) => (
-                      <option key={f}>{f}</option>
-                    ))}
-                  </select>
-                </>
+                </div>
+              </div>
+
+              <div className="field">
+                <span className="field-label">2. Choose a file</span>
+                <label className={`file${file ? " chosen" : ""}`}>
+                  <input
+                    key={`${type}-${fileInputKey}`}
+                    type="file"
+                    accept={jobType.accept}
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  />
+                  {file
+                    ? file.name
+                    : `Click to choose ${jobType.accept === "image/*" ? "an image" : jobType.accept === "video/*" ? "a video" : "an image or video"}…`}
+                </label>
+              </div>
+
+              {type !== "deblur" && (
+                <div className="field">
+                  <span className="field-label">3. Options</span>
+                  <div className="row">
+                    {type === "image_resize" && (
+                      <>
+                        <label className="inline">
+                          Width <input className="num" type="number" min={1} value={params.width} onChange={set("width")} />
+                        </label>
+                        <label className="inline">
+                          Height <input className="num" type="number" min={1} value={params.height} onChange={set("height")} />
+                        </label>
+                        <span className="muted">px</span>
+                      </>
+                    )}
+                    {type === "trim" && (
+                      <>
+                        <label className="inline">
+                          Start <input className="num" type="number" min={0} step="any" value={params.start} onChange={set("start")} />
+                        </label>
+                        <label className="inline">
+                          End <input className="num" type="number" min={0} step="any" value={params.end} onChange={set("end")} />
+                        </label>
+                        <span className="muted">seconds</span>
+                      </>
+                    )}
+                    {type === "video_quality" && (
+                      <label className="inline">
+                        Resolution
+                        <select value={params.resolution} onChange={set("resolution")}>
+                          {RESOLUTIONS.map((r) => (
+                            <option key={r}>{r}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {type === "format_converter" &&
+                      (file ? (
+                        <label className="inline">
+                          .{ext} to
+                          <select value={output} onChange={set("output")}>
+                            {outputFormats.map((f) => (
+                              <option key={f}>{f}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <span className="muted">Choose a file first to pick the output format.</span>
+                      ))}
+                  </div>
+                </div>
               )}
 
-              {invalid && <span className="hint muted">{invalid}</span>}
-              <button className="primary" type="submit" disabled={!file || !!invalid || submitting}>
-                {submitting ? "Uploading…" : "Run"}
-              </button>
+              <div className="form-foot">
+                {invalid && <span className="hint muted">{invalid}</span>}
+                <button className="primary" type="submit" disabled={!file || !!invalid || submitting}>
+                  {submitting ? "Uploading…" : "Run"}
+                </button>
+              </div>
             </form>
           </>
         )}
