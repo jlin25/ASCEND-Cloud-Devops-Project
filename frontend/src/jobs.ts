@@ -34,6 +34,14 @@ export function basename(key: string) {
   return name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i, "") || name;
 }
 
+// What the browser can show inline, by file extension.
+export function mediaKind(key: string): "image" | "video" | null {
+  const ext = key.split(".").pop()?.toLowerCase() ?? "";
+  if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) return "image";
+  if (["mp4", "webm", "mov"].includes(ext)) return "video";
+  return null;
+}
+
 // created_at is a TIMESTAMP without time zone (UTC on the server), so the
 // string carries no offset — read it as UTC instead of local time.
 export function parseUtc(s: string) {

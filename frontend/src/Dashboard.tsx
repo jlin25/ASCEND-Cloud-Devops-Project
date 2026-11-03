@@ -155,24 +155,6 @@ export default function Dashboard({ username, onLogout }: { username: string; on
     }
   }
 
-  async function handleDownload(id: string) {
-    // Open the tab during the click itself so popup blockers allow it, then
-    // point it at the presigned URL once the request comes back.
-    const tab = window.open("", "_blank");
-    try {
-      const data = (await api.getTaskResult(id)) as { output_file_url: string };
-      if (tab) {
-        tab.opener = null;
-        tab.location.href = data.output_file_url;
-      } else {
-        window.open(data.output_file_url, "_blank", "noopener");
-      }
-    } catch (err) {
-      tab?.close();
-      fail(err, "Couldn't get result");
-    }
-  }
-
   async function handleDelete(id: string) {
     try {
       await api.deleteTask(id);
@@ -205,7 +187,7 @@ export default function Dashboard({ username, onLogout }: { username: string; on
         </header>
 
         {selectedJob ? (
-          <JobDetail key={selectedJob.id} job={selectedJob} onDownload={handleDownload} onDelete={handleDelete} />
+          <JobDetail key={selectedJob.id} job={selectedJob} onDelete={handleDelete} />
         ) : (
           <>
             <div>
