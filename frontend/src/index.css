@@ -169,6 +169,15 @@ button:disabled {
   margin-left: auto;
 }
 
+.submit .hint {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.submit .hint + .primary {
+  margin-left: 0;
+}
+
 .file {
   height: 30px;
   max-width: 220px;

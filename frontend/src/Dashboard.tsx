@@ -50,6 +50,8 @@ export default function Dashboard({ username, onLogout }: { username: string; on
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  // Bumped after each submit to remount the file input, so picking the same file again fires onChange.
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const fail = useCallback(
     (err: unknown, prefix: string) => {
@@ -81,11 +83,33 @@ export default function Dashboard({ username, onLogout }: { username: string; on
     return () => clearInterval(id);
   }, [active, refresh]);
 
+  // Success messages fade out on their own; errors stay until the next action.
+  useEffect(() => {
+    if (!message || message.error) return;
+    const id = setTimeout(() => setMessage(null), 4000);
+    return () => clearTimeout(id);
+  }, [message]);
+
   const ext = file ? extension(file.name) : "";
   const outputFormats = (VIDEO_FORMATS.includes(ext) ? VIDEO_FORMATS : IMAGE_FORMATS).filter((f) => f !== ext);
   const output = outputFormats.includes(params.output) ? params.output : outputFormats[0];
   const set = (key: keyof typeof params) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setParams({ ...params, [key]: e.target.value });
+
+  function validate(): string | null {
+    if (type === "image_resize" && !(Number(params.width) >= 1 && Number(params.height) >= 1)) {
+      return "Width and height must be at least 1";
+    }
+    if (type === "trim") {
+      if (params.start === "" || params.end === "" || !(Number(params.start) >= 0)) return "Enter a start and end time";
+      if (!(Number(params.end) > Number(params.start))) return "End must be after start";
+    }
+    if (type === "format_converter" && file && ![...VIDEO_FORMATS, ...IMAGE_FORMATS].includes(ext)) {
+      return `Can't convert .${ext} files`;
+    }
+    return null;
+  }
+  const invalid = validate();
 
   function buildJob(file_url: string): CreateTaskBody {
     switch (type) {
@@ -109,16 +133,14 @@ export default function Dashboard({ username, onLogout }: { username: string; on
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
-    if (type === "format_converter" && ![...VIDEO_FORMATS, ...IMAGE_FORMATS].includes(ext)) {
-      return setMessage({ text: `Can't convert .${ext} files`, error: true });
-    }
+    if (!file || invalid) return;
     setSubmitting(true);
     setMessage(null);
     try {
       const { file_key } = await api.upload(file);
       await api.createTask(buildJob(file_key));
       setFile(null);
+      setFileInputKey((k) => k + 1);
       setMessage({ text: `Submitted ${file.name}` });
       await refresh();
     } catch (err) {
@@ -167,7 +189,7 @@ export default function Dashboard({ username, onLogout }: { username: string; on
 
         <label className="file">
           <input
-            key={type}
+            key={`${type}-${fileInputKey}`}
             type="file"
             accept={JOB_TYPES.find((j) => j.type === type)?.accept}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -208,7 +230,8 @@ export default function Dashboard({ username, onLogout }: { username: string; on
           </>
         )}
 
-        <button className="primary" type="submit" disabled={!file || submitting}>
+        {invalid && <span className="hint muted">{invalid}</span>}
+        <button className="primary" type="submit" disabled={!file || !!invalid || submitting}>
           {submitting ? "Uploading…" : "Run"}
         </button>
       </form>
