@@ -259,6 +259,19 @@ td.actions .link + .link {
 .badge.processing {
   background: rgb(59 130 246 / 15%);
   color: #3b82f6;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge.processing {
+    animation: none;
+  }
 }
 
 .badge.done {

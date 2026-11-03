@@ -36,6 +36,27 @@ function basename(key: string) {
   return key.split("/").pop() ?? key;
 }
 
+// created_at is a TIMESTAMP without time zone (UTC on the server), so the
+// string carries no offset — read it as UTC instead of local time.
+function parseUtc(s: string) {
+  return new Date(/(Z|[+-]\d\d:?\d\d)$/i.test(s) ? s : `${s}Z`);
+}
+
+const relative = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+function timeAgo(date: Date) {
+  const seconds = (date.getTime() - Date.now()) / 1000;
+  const units: [Intl.RelativeTimeFormatUnit, number][] = [
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+  ];
+  for (const [unit, size] of units) {
+    if (Math.abs(seconds) >= size) return relative.format(Math.trunc(seconds / size), unit);
+  }
+  return "just now";
+}
+
 export default function Dashboard({ username, onLogout }: { username: string; onLogout: () => void }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -103,6 +124,13 @@ export default function Dashboard({ username, onLogout }: { username: string; on
       document.removeEventListener("click", disarm);
     };
   }, [confirmingId]);
+
+  // Re-render periodically so relative times ("2 minutes ago") stay current.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   const ext = file ? extension(file.name) : "";
   const outputFormats = (VIDEO_FORMATS.includes(ext) ? VIDEO_FORMATS : IMAGE_FORMATS).filter((f) => f !== ext);
@@ -286,7 +314,9 @@ export default function Dashboard({ username, onLogout }: { username: string; on
                     {basename(job.input_key)}
                   </td>
                   <td className="muted">{LABELS[job.job_type] ?? job.job_type}</td>
-                  <td className="muted">{new Date(job.created_at).toLocaleString()}</td>
+                  <td className="muted" title={parseUtc(job.created_at).toLocaleString()}>
+                    {timeAgo(parseUtc(job.created_at))}
+                  </td>
                   <td className="actions">
                     {job.status === "done" && (
                       <button className="link" onClick={() => handleDownload(job.id)}>
