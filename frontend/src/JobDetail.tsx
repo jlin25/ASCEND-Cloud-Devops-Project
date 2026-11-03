@@ -106,7 +106,7 @@ export default function JobDetail({ job, onDelete }: Props) {
         {/* A plain link (not window.open after a fetch) so popup blockers leave it alone. */}
         {job.status === "done" && files?.output_url && (
           <a className="primary button-link" href={files.output_url} target="_blank" rel="noopener noreferrer">
-            Open result
+            Download
           </a>
         )}
         <button
