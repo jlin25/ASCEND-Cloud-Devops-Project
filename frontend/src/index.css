@@ -142,26 +142,238 @@ button:disabled {
   font-size: 13px;
 }
 
-/* App */
+/* App shell */
 
-.app {
-  max-width: 860px;
+.shell {
+  display: flex;
+  min-height: 100svh;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 24px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.topbar {
-  display: flex;
+.page-title {
+  font-size: 16px;
+}
+
+.mobile-bar {
+  display: none;
   align-items: center;
   gap: 12px;
 }
 
-.topbar .logo {
-  margin-right: auto;
+.menu-button {
+  font-size: 18px;
+  color: var(--text);
 }
+
+.scrim {
+  display: none;
+}
+
+/* Sidebar */
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  width: 260px;
+  height: 100svh;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+}
+
+.sidebar-head {
+  padding: 4px 8px 12px;
+}
+
+.side-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+}
+
+.side-item:hover {
+  background: var(--bg);
+}
+
+.side-item.active {
+  background: var(--border);
+}
+
+.side-item.new {
+  font-weight: 500;
+}
+
+.side-icon {
+  width: 16px;
+  text-align: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.side-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 8px 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.side-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.side-empty {
+  padding: 4px 8px;
+}
+
+.side-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  margin: 0 4px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.dot.processing {
+  background: #3b82f6;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.dot.done {
+  background: #16a34a;
+}
+
+.dot.failed {
+  background: var(--danger);
+}
+
+.user {
+  position: relative;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.user-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 12%);
+}
+
+/* Job detail */
+
+.detail-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 12px 0;
+}
+
+.detail-grid dt {
+  color: var(--muted);
+}
+
+.detail-grid dd {
+  margin: 0;
+}
+
+.detail-file {
+  overflow-wrap: anywhere;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+@media (max-width: 720px) {
+  .sidebar {
+    position: fixed;
+    z-index: 20;
+    left: 0;
+    transform: translateX(-100%);
+    transition: transform 0.2s;
+  }
+
+  .sidebar.open {
+    transform: none;
+  }
+
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: rgb(0 0 0 / 35%);
+  }
+
+  .mobile-bar {
+    display: flex;
+  }
+}
+
+/* New job form */
 
 .submit {
   display: flex;
@@ -212,37 +424,9 @@ button:disabled {
 
 .card-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.empty {
-  padding: 8px 0;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-td {
-  padding: 6px 8px 6px 0;
-  border-top: 1px solid var(--border);
-  white-space: nowrap;
-}
-
-td.name {
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-td.actions {
-  text-align: right;
-}
-
-td.actions .link + .link {
-  margin-left: 12px;
+  gap: 12px;
 }
 
 .badge {
