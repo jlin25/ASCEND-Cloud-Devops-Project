@@ -1,43 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type CreateTaskBody } from "./api";
-
-type Job = {
-  id: string;
-  job_type: string;
-  input_key: string;
-  output_key: string | null;
-  status: "pending" | "processing" | "done" | "failed";
-  created_at: string;
-};
+import { JOB_TYPES, type Job, type JobType } from "./jobs";
+import Sidebar from "./Sidebar";
+import JobDetail from "./JobDetail";
 
 const VIDEO_FORMATS = ["mp4", "mov", "avi", "webm"];
 const IMAGE_FORMATS = ["jpg", "png", "webp"];
 const RESOLUTIONS = ["720p", "1080p", "4k"] as const;
-
-// Only the job types the worker actually implements (see backend/worker.py).
-const JOB_TYPES = [
-  { type: "image_resize", label: "Resize image", accept: "image/*" },
-  { type: "deblur", label: "Deblur image", accept: "image/*" },
-  { type: "trim", label: "Trim video", accept: "video/*" },
-  { type: "video_quality", label: "Change resolution", accept: "video/*" },
-  { type: "format_converter", label: "Convert format", accept: "image/*,video/*" },
-] as const;
-
-type JobType = (typeof JOB_TYPES)[number]["type"];
-
-const LABELS: Record<string, string> = Object.fromEntries(JOB_TYPES.map((j) => [j.type, j.label]));
 
 function extension(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   return ext === "jpeg" ? "jpg" : ext;
 }
 
-function basename(key: string) {
-  return key.split("/").pop() ?? key;
-}
-
 export default function Dashboard({ username, onLogout }: { username: string; onLogout: () => void }) {
   const [jobs, setJobs] = useState<Job[]>([]);
+  // Job shown in the main panel; null shows the new-job form.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Sidebar visibility on narrow screens (always visible on desktop).
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [type, setType] = useState<JobType>("image_resize");
   const [params, setParams] = useState({
@@ -50,6 +31,8 @@ export default function Dashboard({ username, onLogout }: { username: string; on
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  // Bumped after each submit to remount the file input, so picking the same file again fires onChange.
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const fail = useCallback(
     (err: unknown, prefix: string) => {
@@ -81,11 +64,55 @@ export default function Dashboard({ username, onLogout }: { username: string; on
     return () => clearInterval(id);
   }, [active, refresh]);
 
+  // Success messages fade out on their own; errors stay until the next action.
+  useEffect(() => {
+    if (!message || message.error) return;
+    const id = setTimeout(() => setMessage(null), 4000);
+    return () => clearTimeout(id);
+  }, [message]);
+
+  // Re-render periodically so relative times ("2 minutes ago") stay current.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const selectedJob = jobs.find((j) => j.id === selectedId);
+  const jobType = JOB_TYPES.find((j) => j.type === type)!;
+
+  // Keep the chosen file when switching job type only if the new type accepts it.
+  function changeType(next: JobType) {
+    const accept = JOB_TYPES.find((j) => j.type === next)!.accept;
+    if (file && !accept.split(",").some((a) => file.type.startsWith(a.replace("*", "")))) setFile(null);
+    setType(next);
+  }
+
+  function select(id: string | null) {
+    setSelectedId(id);
+    setSidebarOpen(false);
+  }
+
   const ext = file ? extension(file.name) : "";
   const outputFormats = (VIDEO_FORMATS.includes(ext) ? VIDEO_FORMATS : IMAGE_FORMATS).filter((f) => f !== ext);
   const output = outputFormats.includes(params.output) ? params.output : outputFormats[0];
   const set = (key: keyof typeof params) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setParams({ ...params, [key]: e.target.value });
+
+  function validate(): string | null {
+    if (type === "image_resize" && !(Number(params.width) >= 1 && Number(params.height) >= 1)) {
+      return "Width and height must be at least 1";
+    }
+    if (type === "trim") {
+      if (params.start === "" || params.end === "" || !(Number(params.start) >= 0)) return "Enter a start and end time";
+      if (!(Number(params.end) > Number(params.start))) return "End must be after start";
+    }
+    if (type === "format_converter" && file && ![...VIDEO_FORMATS, ...IMAGE_FORMATS].includes(ext)) {
+      return `Can't convert .${ext} files`;
+    }
+    return null;
+  }
+  const invalid = validate();
 
   function buildJob(file_url: string): CreateTaskBody {
     switch (type) {
@@ -109,18 +136,18 @@ export default function Dashboard({ username, onLogout }: { username: string; on
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) return;
-    if (type === "format_converter" && ![...VIDEO_FORMATS, ...IMAGE_FORMATS].includes(ext)) {
-      return setMessage({ text: `Can't convert .${ext} files`, error: true });
-    }
+    if (!file || invalid) return;
     setSubmitting(true);
     setMessage(null);
     try {
       const { file_key } = await api.upload(file);
-      await api.createTask(buildJob(file_key));
+      const { task_id } = (await api.createTask(buildJob(file_key))) as { task_id: string };
       setFile(null);
+      setFileInputKey((k) => k + 1);
       setMessage({ text: `Submitted ${file.name}` });
       await refresh();
+      // Jump to the new job so its progress is visible straight away.
+      setSelectedId(task_id);
     } catch (err) {
       fail(err, "Submit failed");
     } finally {
@@ -128,131 +155,143 @@ export default function Dashboard({ username, onLogout }: { username: string; on
     }
   }
 
-  async function handleDownload(id: string) {
-    try {
-      const data = (await api.getTaskResult(id)) as { output_file_url: string };
-      window.open(data.output_file_url, "_blank");
-    } catch (err) {
-      fail(err, "Couldn't get result");
-    }
-  }
-
   async function handleDelete(id: string) {
     try {
       await api.deleteTask(id);
       setJobs(jobs.filter((j) => j.id !== id));
+      if (selectedId === id) setSelectedId(null);
     } catch (err) {
       fail(err, "Delete failed");
     }
   }
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <span className="logo">ASCEND</span>
-        <span className="muted">{username}</span>
-        <button className="link" onClick={onLogout}>
-          Log out
-        </button>
-      </header>
+    <div className="shell">
+      <Sidebar
+        username={username}
+        jobs={jobs}
+        selectedId={selectedJob ? selectedId : null}
+        open={sidebarOpen}
+        onSelect={select}
+        onRefresh={refresh}
+        onLogout={onLogout}
+      />
+      {sidebarOpen && <div className="scrim" onClick={() => setSidebarOpen(false)} />}
 
-      <form className="card submit" onSubmit={handleSubmit}>
-        <select value={type} onChange={(e) => setType(e.target.value as JobType)}>
-          {JOB_TYPES.map((j) => (
-            <option key={j.type} value={j.type}>
-              {j.label}
-            </option>
-          ))}
-        </select>
-
-        <label className="file">
-          <input
-            key={type}
-            type="file"
-            accept={JOB_TYPES.find((j) => j.type === type)?.accept}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          {file ? file.name : "Choose file…"}
-        </label>
-
-        {type === "image_resize" && (
-          <>
-            <input className="num" type="number" min={1} value={params.width} onChange={set("width")} title="Width" />
-            <span className="muted">×</span>
-            <input className="num" type="number" min={1} value={params.height} onChange={set("height")} title="Height" />
-          </>
-        )}
-        {type === "trim" && (
-          <>
-            <input className="num" type="number" min={0} step="any" value={params.start} onChange={set("start")} title="Start (s)" />
-            <span className="muted">to</span>
-            <input className="num" type="number" min={0} step="any" value={params.end} onChange={set("end")} title="End (s)" />
-            <span className="muted">s</span>
-          </>
-        )}
-        {type === "video_quality" && (
-          <select value={params.resolution} onChange={set("resolution")}>
-            {RESOLUTIONS.map((r) => (
-              <option key={r}>{r}</option>
-            ))}
-          </select>
-        )}
-        {type === "format_converter" && file && (
-          <>
-            <span className="muted">.{ext} →</span>
-            <select value={output} onChange={set("output")}>
-              {outputFormats.map((f) => (
-                <option key={f}>{f}</option>
-              ))}
-            </select>
-          </>
-        )}
-
-        <button className="primary" type="submit" disabled={!file || submitting}>
-          {submitting ? "Uploading…" : "Run"}
-        </button>
-      </form>
-
-      {message && <p className={message.error ? "error" : "muted"}>{message.text}</p>}
-
-      <section className="card">
-        <div className="card-head">
-          <h2>Jobs</h2>
-          <button className="link" onClick={refresh}>
-            Refresh
+      <main className="main">
+        <header className="mobile-bar">
+          <button className="link menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+            ☰
           </button>
-        </div>
-        {jobs.length === 0 ? (
-          <p className="muted empty">No jobs yet.</p>
+          <span className="logo">ASCEND</span>
+        </header>
+
+        {selectedJob ? (
+          <JobDetail key={selectedJob.id} job={selectedJob} onDelete={handleDelete} />
         ) : (
-          <table>
-            <tbody>
-              {jobs.map((job) => (
-                <tr key={job.id}>
-                  <td>
-                    <span className={`badge ${job.status}`}>{job.status}</span>
-                  </td>
-                  <td className="name" title={job.input_key}>
-                    {basename(job.input_key)}
-                  </td>
-                  <td className="muted">{LABELS[job.job_type] ?? job.job_type}</td>
-                  <td className="muted">{new Date(job.created_at).toLocaleString()}</td>
-                  <td className="actions">
-                    {job.status === "done" && (
-                      <button className="link" onClick={() => handleDownload(job.id)}>
-                        Download
-                      </button>
-                    )}
-                    <button className="link danger" onClick={() => handleDelete(job.id)} title="Delete">
-                      ✕
+          <>
+            <div>
+              <h1 className="page-title">New job</h1>
+              <p className="muted">Pick what to do, add a file and press Run. Your uploads appear on the left.</p>
+            </div>
+            <form className="card submit" onSubmit={handleSubmit}>
+              <div className="field">
+                <span className="field-label">1. What do you want to do?</span>
+                <div className="type-grid">
+                  {JOB_TYPES.map((j) => (
+                    <button
+                      key={j.type}
+                      type="button"
+                      className={`type-option${type === j.type ? " active" : ""}`}
+                      onClick={() => changeType(j.type)}
+                    >
+                      <span className="type-name">{j.label}</span>
+                      <span className="muted">{j.description}</span>
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field">
+                <span className="field-label">2. Choose a file</span>
+                <label className={`file${file ? " chosen" : ""}`}>
+                  <input
+                    key={`${type}-${fileInputKey}`}
+                    type="file"
+                    accept={jobType.accept}
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  />
+                  {file
+                    ? file.name
+                    : `Click to choose ${jobType.accept === "image/*" ? "an image" : jobType.accept === "video/*" ? "a video" : "an image or video"}…`}
+                </label>
+              </div>
+
+              {type !== "deblur" && (
+                <div className="field">
+                  <span className="field-label">3. Options</span>
+                  <div className="row">
+                    {type === "image_resize" && (
+                      <>
+                        <label className="inline">
+                          Width <input className="num" type="number" min={1} value={params.width} onChange={set("width")} />
+                        </label>
+                        <label className="inline">
+                          Height <input className="num" type="number" min={1} value={params.height} onChange={set("height")} />
+                        </label>
+                        <span className="muted">px</span>
+                      </>
+                    )}
+                    {type === "trim" && (
+                      <>
+                        <label className="inline">
+                          Start <input className="num" type="number" min={0} step="any" value={params.start} onChange={set("start")} />
+                        </label>
+                        <label className="inline">
+                          End <input className="num" type="number" min={0} step="any" value={params.end} onChange={set("end")} />
+                        </label>
+                        <span className="muted">seconds</span>
+                      </>
+                    )}
+                    {type === "video_quality" && (
+                      <label className="inline">
+                        Resolution
+                        <select value={params.resolution} onChange={set("resolution")}>
+                          {RESOLUTIONS.map((r) => (
+                            <option key={r}>{r}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {type === "format_converter" &&
+                      (file ? (
+                        <label className="inline">
+                          .{ext} to
+                          <select value={output} onChange={set("output")}>
+                            {outputFormats.map((f) => (
+                              <option key={f}>{f}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <span className="muted">Choose a file first to pick the output format.</span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="form-foot">
+                {invalid && <span className="hint muted">{invalid}</span>}
+                <button className="primary" type="submit" disabled={!file || !!invalid || submitting}>
+                  {submitting ? "Uploading…" : "Run"}
+                </button>
+              </div>
+            </form>
+          </>
         )}
-      </section>
+
+        {message && <p className={message.error ? "error" : "muted"}>{message.text}</p>}
+      </main>
     </div>
   );
 }

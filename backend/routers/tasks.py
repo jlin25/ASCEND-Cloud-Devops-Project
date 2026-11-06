@@ -82,6 +82,26 @@ async def get_task_result(task_id: str, current_user : User = Depends(get_curren
         return {"output_file_url": url}
 
 
+@router.get("/tasks/{task_id}/files")
+async def get_task_files(task_id: str, current_user : User = Depends(get_current_user)):
+    # Presigned links so the frontend can preview the original upload and, once done, the output.
+    response = (
+        database.table("jobs")
+        .select("input_key, output_key, status")
+        .eq("id", task_id)
+        .eq("user_id", current_user.id)
+        .execute()
+    )
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    job = response.data[0]
+    output_ready = job["status"] == "done" and job["output_key"]
+    return {
+        "input_url": s3.get_output_url(job["input_key"], expires_in=3600),
+        "output_url": s3.get_output_url(job["output_key"], expires_in=3600) if output_ready else None,
+    }
+
+
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, current_user : User = Depends(get_current_user)):
     response = database.table("jobs").delete().eq("id", task_id).eq("user_id", current_user.id).execute()

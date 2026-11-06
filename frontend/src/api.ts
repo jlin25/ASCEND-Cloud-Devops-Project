@@ -92,6 +92,8 @@ export const api = {
   listTasks: () => request("/tasks"),
   getTask: (id: string) => request(`/tasks/${id}`),
   getTaskResult: (id: string) => request(`/tasks/${id}/result`),
+  getTaskFiles: (id: string) =>
+    request<{ input_url: string; output_url: string | null }>(`/tasks/${id}/files`),
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: "DELETE" }),
 
   // Auth.
