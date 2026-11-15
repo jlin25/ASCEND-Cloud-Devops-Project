@@ -105,6 +105,19 @@ def test_create_video_quality_task_enqueues_with_user_id(client, fake_queue, fak
     assert msg["resolution"] == "1080p"
 
 
+def test_create_extract_audio_task_enqueues(client, fake_queue, fake_db):
+    resp = client.post(
+        "/tasks",
+        json={"type": "extract_audio", "file_url": "uploads/u1/a.mp4", "format": "mp3"},
+    )
+    assert resp.status_code == 200
+    assert fake_db.jobs.inserted["job_type"] == "extract_audio"
+
+    msg = fake_queue.messages[0]
+    assert msg["type"] == "extract_audio"
+    assert msg["format"] == "mp3"
+
+
 def test_create_task_rejects_unknown_type(client):
     resp = client.post("/tasks", json={"type": "nope", "file_url": "k"})
     assert resp.status_code == 422

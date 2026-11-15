@@ -15,6 +15,8 @@ function Preview({ label, url, fileKey, placeholder }: { label: string; url?: st
     );
   } else if (kind === "video") {
     body = <video src={url} controls preload="metadata" />;
+  } else if (kind === "audio") {
+    body = <audio src={url} controls preload="metadata" />;
   } else {
     body = <p className="muted">No preview for this file type. Download it to view.</p>;
   }
@@ -23,6 +25,29 @@ function Preview({ label, url, fileKey, placeholder }: { label: string; url?: st
       <figcaption className="muted">{label}</figcaption>
       <div className="preview-box">{body}</div>
     </figure>
+  );
+}
+
+// Shown while a job is queued or running. Jobs that report a real percentage
+// get a filling bar; the rest (and queued jobs) get an animated one.
+function ProgressBar({ job }: { job: Job }) {
+  const pct = job.status === "processing" && job.progress ? job.progress : null;
+  const label = job.status === "pending" ? "Waiting in queue…" : pct !== null ? `Processing · ${pct}%` : "Processing…";
+  return (
+    <div className="progress-wrap">
+      <div
+        className={`progress${pct === null ? " indeterminate" : ""}`}
+        role="progressbar"
+        aria-label="Job progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct ?? undefined}
+        aria-valuetext={label}
+      >
+        <div className="progress-fill" style={pct !== null ? { width: `${pct}%` } : undefined} />
+      </div>
+      <p className="muted progress-label">{label}</p>
+    </div>
   );
 }
 
@@ -99,7 +124,7 @@ export default function JobDetail({ job, onDelete }: Props) {
         />
       </div>
 
-      {active && <p className="muted">Working on it — this updates automatically.</p>}
+      {active && <ProgressBar job={job} />}
       {job.status === "failed" && <p className="error">This job failed. Try submitting the file again.</p>}
 
       <div className="detail-actions">

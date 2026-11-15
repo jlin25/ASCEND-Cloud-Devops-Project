@@ -105,7 +105,9 @@ React/Vite frontend  ──HTTP──▶  FastAPI backend  ──insert──▶
     UI.**
   - `transcode`: `file_url`, `format` (mp4/webm/mov), `resolution` — ⚠️ `pass`
     stub: marks the job `done` with `output_key = None` (silent success).
-  - `extract_audio`: `file_url`, `format` (mp3/wav/aac) — ⚠️ same `pass` stub.
+  - `extract_audio`: `file_url`, `format` (mp3/wav/aac) — **implemented, in UI.**
+    ffmpeg `-vn -map 0:a:0`; the output is named with the new extension
+    (`clip.mp4` → `clip.mp3`). A video with no audio track fails the job.
   - `transcribe`: `file_url` — ⚠️ schema and IAM permissions only. **No worker
     handler**, so it falls through to `assert_never` and the message is redelivered
     until it lands in the DLQ. Do not expose in the UI.
@@ -179,8 +181,9 @@ Frontend reads `VITE_API_BASE` (defaults to `http://localhost:8000` — no `.env
       appear in the Dashboard picker, Task Catalog, Home and Tutorial at once.
 - [ ] Add route guards — `/dashboard`, `/jobs`, `/marketplace` currently render
       for signed-out users and the API calls just 401.
-- [ ] Fix the two silent-success stubs: `transcode` and `extract_audio` mark jobs
-      `done` with no output instead of failing.
+- [ ] Implement or drop `transcode` (it duplicates `format_converter` +
+      `video_quality`). The API currently rejects it with a 400.
+- [x] `extract_audio` implemented end to end (worker + API + UI).
 - [ ] Give `transcribe` a worker handler, or drop it from the `JobRequest` union —
       today it would retry to the DLQ. IAM permissions are already in place.
 - [ ] Don't re-deliver permanently failed jobs: `worker.py` marks the row `failed`

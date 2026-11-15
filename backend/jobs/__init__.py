@@ -9,6 +9,7 @@ from .jobs import (
     JobRequest,
     DeblurJob,
     job_adapter,
+    VIDEO_FORMATS,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "ImageResizeJob",
     "FormatConverterJob",
     "TranscribeJob",
+    "VIDEO_FORMATS",
 ]

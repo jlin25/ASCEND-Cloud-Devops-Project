@@ -14,7 +14,7 @@ s3 = S3Client()
 
 # Job types the worker can actually process (see worker.handle). The rest exist
 # in the schema but would only fail in the worker, so reject them up front.
-SUPPORTED_JOB_TYPES = {"trim", "video_quality", "image_resize", "deblur", "format_converter"}
+SUPPORTED_JOB_TYPES = {"trim", "video_quality", "image_resize", "deblur", "format_converter", "extract_audio"}
 
 @router.post("/tasks")
 async def create_task(job: JobRequest, current_user: User = Depends(get_current_user)):

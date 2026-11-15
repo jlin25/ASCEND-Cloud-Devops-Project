@@ -69,6 +69,7 @@ export default function Sidebar({ username, jobs, selectedId, open, onSelect, on
                 <span className="side-name">{basename(job.input_key)}</span>
                 <span className="side-meta muted">
                   {LABELS[job.job_type] ?? job.job_type} · {timeAgo(parseUtc(job.created_at))}
+                  {job.status === "processing" && job.progress ? ` · ${job.progress}%` : ""}
                 </span>
               </span>
             </button>
