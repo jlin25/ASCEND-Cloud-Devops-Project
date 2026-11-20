@@ -1,4 +1,5 @@
 import json
+import math
 import mimetypes
 import os
 import subprocess
@@ -19,6 +20,7 @@ from jobs import (
     FormatConverterJob,
     TranscribeJob,
     job_adapter,
+    VIDEO_FORMATS,
 )
 from s3_client import S3Client
 from typing import assert_never
@@ -30,6 +32,13 @@ queue = JobQueue()
 s3 = S3Client()
 
 _HEIGHT = {"720p": 720, "1080p": 1080, "4k": 2160}
+
+# extract_audio: ffmpeg codec args and the content type for each output format.
+_AUDIO = {
+    "mp3": (["-c:a", "libmp3lame", "-q:a", "2"], "audio/mpeg"),
+    "wav": (["-c:a", "pcm_s16le"], "audio/wav"),
+    "aac": (["-c:a", "aac", "-b:a", "192k"], "audio/aac"),
+}
 
 
 deblur_model_path = hf_hub_download(
@@ -110,6 +119,86 @@ def beat(grace: float = 0) -> None:
         hb.beat(grace)
 
 
+# --- Percent complete --------------------------------------------------------
+# Written to jobs.progress so the frontend can draw a progress bar. Throttled
+# so a long encode costs ~20 DB writes, not one per ffmpeg progress line.
+PROGRESS_MIN_STEP = 5
+PROGRESS_MIN_INTERVAL_SECONDS = 1.0
+
+
+class Progress:
+    """Writes the current job's percent complete to its DB row, throttled."""
+
+    def __init__(self, job_id: str):
+        self.job_id = job_id
+        self._last_pct = 0
+        self._last_write: float | None = None
+
+    def report(self, pct: float) -> None:
+        # Capped at 99: progress == 100 means "output ready" to the API
+        # (GET /tasks/{id}/result), so only the final done-update may set it.
+        pct = int(max(0, min(99, pct)))
+        now = time.monotonic()
+        if pct - self._last_pct < PROGRESS_MIN_STEP:
+            return
+        if self._last_write is not None and now - self._last_write < PROGRESS_MIN_INTERVAL_SECONDS:
+            return
+        self._last_write = now
+        try:
+            database.table("jobs").update({"progress": pct}).eq("id", self.job_id).execute()
+        except Exception as e:
+            # The bar is cosmetic; never fail a job over it.
+            print(f"failed to update progress for job {self.job_id}: {e}")
+            return
+        self._last_pct = pct
+
+    def __enter__(self):
+        self._token = _progress.set(self)
+        return self
+
+    def __exit__(self, *exc):
+        _progress.reset(self._token)
+
+
+_progress: ContextVar[Progress | None] = ContextVar("progress", default=None)
+
+
+def report_progress(pct: float) -> None:
+    """Report the current job's percent complete (no-op outside a Progress)."""
+    p = _progress.get()
+    if p is not None:
+        p.report(pct)
+
+
+def probe_duration(path: str) -> float | None:
+    """A media file's duration in seconds, or None if ffprobe can't tell.
+
+    Only feeds the progress bar, so any failure just means no percentage.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return None
+        duration = float(result.stdout.strip())
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return duration if math.isfinite(duration) and duration > 0 else None
+
+
 def download(key: str, fd: int) -> None:
     """Stream an S3 object into an open mkstemp fd, beating per chunk."""
     with os.fdopen(fd, "wb") as dst:
@@ -118,8 +207,11 @@ def download(key: str, fd: int) -> None:
             beat()
 
 
-def run_ffmpeg(args: list[str]) -> None:
+def run_ffmpeg(args: list[str], duration: float | None = None) -> None:
     """Run ffmpeg, beating whenever its reported output position advances.
+
+    With `duration` (seconds of output expected), each new position is also
+    reported as a percentage for the progress bar.
 
     Raises CalledProcessError (with ffmpeg's stderr) on a non-zero exit so the
     run loop marks the job failed.
@@ -133,6 +225,9 @@ def run_ffmpeg(args: list[str]) -> None:
             if key == "out_time_us" and value != last_position:
                 last_position = value
                 beat()
+                # ffmpeg prints N/A (or a negative value) before the first frame.
+                if duration is not None and duration > 0 and value.isdigit():
+                    report_progress(int(value) / 1e6 / duration * 100)
         if proc.wait() != 0:
             err.seek(0)
             raise subprocess.CalledProcessError(proc.returncode, cmd, stderr=err.read())
@@ -161,7 +256,8 @@ def process_video_quality(job: VideoQualityJob, user_id: str) -> str:
                 "-c:a",
                 "aac",
                 dst_path,
-            ]
+            ],
+            duration=probe_duration(src_path),
         )
 
         filename = os.path.basename(job.file_url)
@@ -262,7 +358,12 @@ def convert_format(job: FormatConverterJob, user_id: str) -> str:
     try:
         download(job.file_url, src_fd)
 
-        run_ffmpeg(["-i", src_path, dst_path])
+        # Image conversions are a single frame, so there's no progress to show.
+        is_video = job.input_format in VIDEO_FORMATS
+        run_ffmpeg(
+            ["-i", src_path, dst_path],
+            duration=probe_duration(src_path) if is_video else None,
+        )
 
         content_type = mimetypes.guess_type(dst_path)[0] or "application/octet-stream"
         filename = os.path.basename(job.file_url)
@@ -285,6 +386,11 @@ def process_trim(job: TrimJob, user_id: str) -> str:
     try:
         download(job.file_url, src_fd)
 
+        # The output only covers the trimmed span (cut short if the video ends
+        # before end_seconds), and ffmpeg reports positions within the output.
+        probed = probe_duration(src_path)
+        end = min(job.end_seconds, probed) if probed else job.end_seconds
+
         run_ffmpeg(
             [
                 "-i",
@@ -296,7 +402,8 @@ def process_trim(job: TrimJob, user_id: str) -> str:
                 "-c",
                 "copy",
                 dst_path,
-            ]
+            ],
+            duration=end - job.start_seconds,
         )
 
         content_type = (
@@ -312,6 +419,35 @@ def process_trim(job: TrimJob, user_id: str) -> str:
         os.remove(dst_path)
 
 
+def process_extract_audio(job: ExtractAudioJob, user_id: str) -> str:
+    codec_args, content_type = _AUDIO[job.format]
+    suffix = os.path.splitext(job.file_url)[1] or ".mp4"
+
+    src_fd, src_path = tempfile.mkstemp(suffix=suffix)
+    dst_fd, dst_path = tempfile.mkstemp(suffix=f".{job.format}")
+    os.close(dst_fd)
+    try:
+        download(job.file_url, src_fd)
+
+        # -vn drops the picture; -map 0:a:0 takes the first audio track, so a
+        # video with no sound fails here instead of producing an empty file.
+        run_ffmpeg(
+            ["-i", src_path, "-vn", "-map", "0:a:0", *codec_args, dst_path],
+            duration=probe_duration(src_path),
+        )
+
+        # Name the output after the new format (clip.mp4 -> clip.mp3): the
+        # frontend picks the preview and the download name by extension.
+        stem = os.path.splitext(os.path.basename(job.file_url))[0]
+        with open(dst_path, "rb") as out:
+            return s3.upload_stream(
+                user_id, f"{stem}.{job.format}", out, content_type, prefix="processed"
+            )
+    finally:
+        os.remove(src_path)
+        os.remove(dst_path)
+
+
 def handle(job: JobRequest, user_id: str) -> str:
     match job:
         case TranscodeJob():
@@ -319,7 +455,7 @@ def handle(job: JobRequest, user_id: str) -> str:
         case TrimJob():
             return process_trim(job, user_id)
         case ExtractAudioJob():
-            raise NotImplementedError("extract_audio")
+            return process_extract_audio(job, user_id)
         case VideoQualityJob():
             return process_video_quality(job, user_id)
         case ImageResizeJob():
@@ -344,11 +480,12 @@ def run():
             job_id = body["job_id"]
             user_id = body["user_id"]
             try:
-                database.table("jobs").update({"status": "processing"}).eq(
-                    "id", job_id
-                ).execute()
+                # Reset progress too, so a retried job doesn't start half full.
+                database.table("jobs").update(
+                    {"status": "processing", "progress": 0}
+                ).eq("id", job_id).execute()
                 job = job_adapter.validate_python(body)
-                with Heartbeat(msg["ReceiptHandle"]):
+                with Heartbeat(msg["ReceiptHandle"]), Progress(job_id):
                     output_key = handle(job, user_id)
                 database.table("jobs").update(
                     {

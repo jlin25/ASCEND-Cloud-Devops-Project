@@ -58,7 +58,7 @@ Last updated: 2026-07-21. Architecture → `CONTEXT.md`. Launch/test/teardown �
 | `video_quality` | ✅ | S3 download → ffmpeg rescale → S3 upload (`processed/`) |
 | `transcode` | ⏳ | `pass` stub |
 | `trim` | ⏳ | `pass` stub |
-| `extract_audio` | ⏳ | `pass` stub |
+| `extract_audio` | ✅ | ffmpeg `-vn -map 0:a:0` → mp3/wav/aac in `processed/`; fails if the video has no audio |
 | SQS poll loop + status updates | ✅ | `processing` → `done`/`failed` |
 
 ## Storage — `backend/s3_client.py`

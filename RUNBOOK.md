@@ -124,8 +124,8 @@ ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p
 ```
 
 Needs `jq` and a real `sample.mp4`. Implemented types: `video_quality`, `trim`,
-`image_resize`, `deblur`, `format_converter`. The API rejects `transcode`,
-`extract_audio` and `transcribe` with a 400 until the worker supports them.
+`image_resize`, `deblur`, `format_converter`, `extract_audio`. The API rejects
+`transcode` and `transcribe` with a 400 until the worker supports them.
 
 ---
 

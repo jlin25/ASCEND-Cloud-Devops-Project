@@ -398,11 +398,73 @@ button:disabled {
   border-radius: 4px;
 }
 
+.preview-box audio {
+  width: 100%;
+}
+
 .detail-actions {
   display: flex;
   align-items: center;
   gap: 16px;
   margin-top: 14px;
+}
+
+/* Progress bar: blue to match the "processing" badge and dot. */
+.progress-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progress {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: #3b82f6;
+  transition: width 0.4s ease;
+}
+
+/* No percentage to show: a segment slides across instead. */
+.progress.indeterminate .progress-fill {
+  position: absolute;
+  width: 35%;
+  animation: progress-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  from {
+    left: -35%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill {
+    transition: none;
+  }
+
+  /* Hold the segment still and let the label carry the state. */
+  .progress.indeterminate .progress-fill {
+    animation: none;
+    left: 0;
+    width: 100%;
+    opacity: 0.35;
+  }
+}
+
+.progress-label {
+  margin: 0;
+  font-size: 12px;
 }
 
 @media (max-width: 720px) {

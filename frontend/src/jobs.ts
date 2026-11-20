@@ -6,6 +6,9 @@ export type Job = {
   input_key: string;
   output_key: string | null;
   status: "pending" | "processing" | "done" | "failed";
+  // Percent complete (0–99 while processing, 100 once done). Only video and
+  // audio jobs report real values; the worker leaves the rest at 0 until done.
+  progress: number | null;
   created_at: string;
 };
 
@@ -15,6 +18,7 @@ export const JOB_TYPES = [
   { type: "deblur", label: "Deblur image", description: "Sharpen a blurry photo", accept: "image/*" },
   { type: "trim", label: "Trim video", description: "Keep only part of a video", accept: "video/*" },
   { type: "video_quality", label: "Change resolution", description: "Re-encode at 720p, 1080p or 4K", accept: "video/*" },
+  { type: "extract_audio", label: "Extract audio", description: "Save a video's sound as MP3, WAV or AAC", accept: "video/*" },
   {
     type: "format_converter",
     label: "Convert format",
@@ -35,10 +39,11 @@ export function basename(key: string) {
 }
 
 // What the browser can show inline, by file extension.
-export function mediaKind(key: string): "image" | "video" | null {
+export function mediaKind(key: string): "image" | "video" | "audio" | null {
   const ext = key.split(".").pop()?.toLowerCase() ?? "";
   if (["jpg", "jpeg", "png", "webp", "gif"].includes(ext)) return "image";
   if (["mp4", "webm", "mov"].includes(ext)) return "video";
+  if (["mp3", "wav", "aac", "m4a"].includes(ext)) return "audio";
   return null;
 }
 

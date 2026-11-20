@@ -7,6 +7,7 @@ import JobDetail from "./JobDetail";
 const VIDEO_FORMATS = ["mp4", "mov", "avi", "webm"];
 const IMAGE_FORMATS = ["jpg", "png", "webp"];
 const RESOLUTIONS = ["720p", "1080p", "4k"] as const;
+const AUDIO_FORMATS = ["mp3", "wav", "aac"] as const;
 
 function extension(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
@@ -27,6 +28,7 @@ export default function Dashboard({ username, onLogout }: { username: string; on
     start: "0",
     end: "10",
     resolution: "1080p",
+    audio: "mp3",
     output: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -56,11 +58,11 @@ export default function Dashboard({ username, onLogout }: { username: string; on
     refresh();
   }, [refresh]);
 
-  // Poll while anything is still in flight.
+  // Poll while anything is still in flight, often enough for progress bars to move smoothly.
   const active = jobs.some((j) => j.status === "pending" || j.status === "processing");
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(refresh, 4000);
+    const id = setInterval(refresh, 2000);
     return () => clearInterval(id);
   }, [active, refresh]);
 
@@ -124,6 +126,8 @@ export default function Dashboard({ username, onLogout }: { username: string; on
         return { type, file_url, start_seconds: Number(params.start), end_seconds: Number(params.end) };
       case "video_quality":
         return { type, file_url, resolution: params.resolution as (typeof RESOLUTIONS)[number] };
+      case "extract_audio":
+        return { type, file_url, format: params.audio as (typeof AUDIO_FORMATS)[number] };
       case "format_converter":
         return {
           type,
@@ -259,6 +263,16 @@ export default function Dashboard({ username, onLogout }: { username: string; on
                         <select value={params.resolution} onChange={set("resolution")}>
                           {RESOLUTIONS.map((r) => (
                             <option key={r}>{r}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {type === "extract_audio" && (
+                      <label className="inline">
+                        Format
+                        <select value={params.audio} onChange={set("audio")}>
+                          {AUDIO_FORMATS.map((f) => (
+                            <option key={f}>{f}</option>
                           ))}
                         </select>
                       </label>
