@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, tasks
+from routers import auth, bundles, tasks
 
 app = FastAPI()
 
@@ -21,3 +21,4 @@ def get_message():
 
 app.include_router(auth.router)
 app.include_router(tasks.router)
+app.include_router(bundles.router)

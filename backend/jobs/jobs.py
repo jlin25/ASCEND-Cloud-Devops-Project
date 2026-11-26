@@ -91,3 +91,25 @@ JobRequest = Annotated[
 ]
 
 job_adapter = TypeAdapter(JobRequest)
+
+
+class BundleJob(BaseModel):
+    type: Literal["bundle"]
+    file_url: str
+
+
+# Everything the worker may receive from the queue: user jobs plus internal ones.
+WorkerJob = Annotated[
+    TranscodeJob
+    | TrimJob
+    | ExtractAudioJob
+    | VideoQualityJob
+    | ImageResizeJob
+    | DeblurJob
+    | FormatConverterJob
+    | TranscribeJob
+    | BundleJob,
+    Field(discriminator="type"),
+]
+
+worker_job_adapter = TypeAdapter(WorkerJob)

@@ -18,8 +18,17 @@ type LoginBody =
   paths["/auth/login"]["post"]["requestBody"]["content"]["application/json"];
 type RegisterBody =
   paths["/auth/register"]["post"]["requestBody"]["content"]["application/json"];
+type CreateBundleBody =
+  paths["/bundles"]["post"]["requestBody"]["content"]["application/json"];
 
-export type { CreateTaskBody, LoginBody, RegisterBody };
+// "Download all as ZIP" state (routers/bundles.py).
+export type Bundle = {
+  status: "pending" | "processing" | "done" | "failed";
+  progress: number | null;
+  download_url: string | null;
+};
+
+export type { CreateTaskBody, LoginBody, RegisterBody, CreateBundleBody };
 
 export class ApiError extends Error {
   status: number;
@@ -95,6 +104,15 @@ export const api = {
   getTaskFiles: (id: string) =>
     request<{ input_url: string; output_url: string | null }>(`/tasks/${id}/files`),
   deleteTask: (id: string) => request(`/tasks/${id}`, { method: "DELETE" }),
+
+  // One ZIP of several jobs' results
+  createBundle: (task_ids: string[]) =>
+    request<{ bundle_id: string }>("/bundles", {
+      method: "POST",
+      body: JSON.stringify({ task_ids } satisfies CreateBundleBody),
+    }),
+  getBundle: (id: string) => request<Bundle>(`/bundles/${id}`),
+  deleteBundle: (id: string) => request(`/bundles/${id}`, { method: "DELETE" }),
 
   // Auth.
   login: (creds: LoginBody) =>

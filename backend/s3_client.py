@@ -1,6 +1,16 @@
+import re
 import uuid
 import boto3
 import os
+
+# Keys are <prefix>/<userid>/<uuid>-<filename>, and <filename> for an output key is named after the uuid + original filename of the input key.
+_UUID_PREFIXES = re.compile(r"^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-)+", re.I)
+
+
+def original_name(key: str) -> str:
+    name = key.rsplit("/", 1)[-1]
+    return _UUID_PREFIXES.sub("", name) or name
+
 
 class S3Client:
     def __init__(self):
@@ -23,14 +33,17 @@ class S3Client:
         response = self.client.get_object(Bucket=self.bucket, Key=input_key)
         return response["Body"]
 
-    def get_output_url(self, key : str, expires_in: int = 24 * 3600) -> str: #link available for one day
+    def get_output_url(self, key : str, expires_in: int = 24 * 3600, download_name: str | None = None) -> str: #link available for one day
+        params = {"Bucket": self.bucket, "Key": key}
+        if download_name:
+            # Makes the browser save the file under this name instead of the raw key.
+            params["ResponseContentDisposition"] = f'attachment; filename="{download_name}"'
         return self.client.generate_presigned_url(
             "get_object",
-            Params={"Bucket": self.bucket, "Key": key},
+            Params=params,
             ExpiresIn=expires_in,
         )
-    
+
     def delete_object(self, key: str):
         self.client.delete_object(Bucket=self.bucket, Key=key)
-    
 

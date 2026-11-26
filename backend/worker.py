@@ -6,11 +6,13 @@ import subprocess
 import tempfile
 import threading
 import time
+import zipfile
 from contextvars import ContextVar
+from botocore.exceptions import ClientError
 from job_queue import JobQueue
 from db.client import database
 from jobs import (
-    JobRequest,
+    WorkerJob,
     TranscodeJob,
     TrimJob,
     ExtractAudioJob,
@@ -19,10 +21,11 @@ from jobs import (
     DeblurJob,
     FormatConverterJob,
     TranscribeJob,
-    job_adapter,
+    BundleJob,
+    worker_job_adapter,
     VIDEO_FORMATS,
 )
-from s3_client import S3Client
+from s3_client import S3Client, original_name
 from typing import assert_never
 import cv2
 import numpy as np
@@ -366,10 +369,10 @@ def convert_format(job: FormatConverterJob, user_id: str) -> str:
         )
 
         content_type = mimetypes.guess_type(dst_path)[0] or "application/octet-stream"
-        filename = os.path.basename(job.file_url)
+        stem = os.path.splitext(os.path.basename(job.file_url))[0]
         with open(dst_path, "rb") as out:
             return s3.upload_stream(
-                user_id, filename, out, content_type, prefix="processed"
+                user_id, f"{stem}.{job.output_format}", out, content_type, prefix="processed"
             )
     finally:
         os.remove(src_path)
@@ -448,7 +451,61 @@ def process_extract_audio(job: ExtractAudioJob, user_id: str) -> str:
         os.remove(dst_path)
 
 
-def handle(job: JobRequest, user_id: str) -> str:
+def _unique_name(name: str, used: set[str]) -> str:
+    candidate = name
+    stem, ext = os.path.splitext(name)
+    n = 2
+    while candidate in used:
+        candidate = f"{stem} ({n}){ext}"
+        n += 1
+    used.add(candidate)
+    return candidate
+
+
+def _is_missing(err: ClientError) -> bool:
+    return err.response.get("Error", {}).get("Code") in ("NoSuchKey", "404")
+
+
+def process_bundle(job: BundleJob, user_id: str) -> str:
+    """ZIP the results listed in the job's manifest (see routers/bundles.py)."""
+    manifest = json.loads(s3.download_stream(job.file_url).read())
+    own = f"processed/{user_id}/"
+    keys = [k for k in manifest.get("files", []) if isinstance(k, str) and k.startswith(own)]
+
+    zip_fd, zip_path = tempfile.mkstemp(suffix=".zip")
+    os.close(zip_fd)
+    try:
+        used: set[str] = set()
+        added = 0
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
+            for i, key in enumerate(keys):
+                try:
+                    body = s3.download_stream(key)
+                except ClientError as e:
+                    if not _is_missing(e):
+                        raise
+                    # Deleted after the ZIP was requested; leave it out.
+                    print(f"bundle {job.file_url}: skipping missing {key}")
+                    continue
+                with zf.open(_unique_name(original_name(key), used), "w", force_zip64=True) as dst:
+                    for chunk in body.iter_chunks():
+                        dst.write(chunk)
+                        beat()
+                added += 1
+                report_progress((i + 1) / len(keys) * 100)
+
+        if added == 0:
+            raise ValueError("none of the requested results are available any more")
+
+        with open(zip_path, "rb") as out:
+            return s3.upload_stream(
+                user_id, f"results-{added}-files.zip", out, "application/zip", prefix="bundles"
+            )
+    finally:
+        os.remove(zip_path)
+
+
+def handle(job: WorkerJob, user_id: str) -> str:
     match job:
         case TranscodeJob():
             raise NotImplementedError("transcode")
@@ -466,6 +523,8 @@ def handle(job: JobRequest, user_id: str) -> str:
             return convert_format(job, user_id)
         case TranscribeJob():
             raise NotImplementedError("transcribe")
+        case BundleJob():
+            return process_bundle(job, user_id)
         case _:
             assert_never(job)
 
@@ -484,7 +543,7 @@ def run():
                 database.table("jobs").update(
                     {"status": "processing", "progress": 0}
                 ).eq("id", job_id).execute()
-                job = job_adapter.validate_python(body)
+                job = worker_job_adapter.validate_python(body)
                 with Heartbeat(msg["ReceiptHandle"]), Progress(job_id):
                     output_key = handle(job, user_id)
                 database.table("jobs").update(

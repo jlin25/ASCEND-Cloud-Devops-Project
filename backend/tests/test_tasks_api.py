@@ -18,14 +18,14 @@ class FakeResult:
 
 
 class FakeTable:
-    """Minimal supabase-py table chain: .insert(row).execute(), and
-    .select(...).eq(...).execute() returning `rows`."""
 
     def __init__(self, insert_id="job-123"):
         self.insert_id = insert_id
         self.inserted = None
         self.rows = []
         self.selecting = False
+        self.deleting = False
+        self._excluded = []
 
     def insert(self, row):
         self.inserted = row
@@ -35,12 +35,25 @@ class FakeTable:
         self.selecting = True
         return self
 
+    def delete(self):
+        self.deleting = True
+        return self
+
     def eq(self, column, value):
         return self
 
+    def neq(self, column, value):
+        self._excluded.append((column, value))
+        return self
+
     def execute(self):
-        if self.selecting:
-            return FakeResult(self.rows)
+        if self.selecting or self.deleting:
+            rows = [r for r in self.rows if all(r.get(c) != v for c, v in self._excluded)]
+            self._excluded = []
+            if self.deleting:
+                self.rows = [r for r in self.rows if r not in rows]
+            self.selecting = self.deleting = False
+            return FakeResult(rows)
         return FakeResult([{"id": self.insert_id}])
 
 
@@ -170,6 +183,55 @@ def test_result_returns_presigned_url(client, fake_db, monkeypatch):
     monkeypatch.setattr(tasks_module.s3, "get_output_url", lambda key: f"https://signed/{key}")
     resp = client.get("/tasks/job-123/result")
     assert resp.json() == {"output_file_url": "https://signed/processed/u1/out.mp4"}
+
+
+# --- internal ZIP ("bundle") jobs are invisible through /tasks --------------
+BUNDLE_ROW = {
+    "id": "b1",
+    "job_type": "bundle",
+    "status": "done",
+    "progress": 100,
+    "input_key": "bundles/u1/m.json",
+    "output_key": "bundles/u1/r.zip",
+}
+NORMAL_ROW = {
+    "id": "j1",
+    "job_type": "image_resize",
+    "status": "done",
+    "progress": 100,
+    "input_key": "uploads/u1/a.png",
+    "output_key": "processed/u1/a.png",
+}
+
+
+def test_create_task_rejects_bundle_type(client, fake_queue, fake_db):
+    # Not in the public JobRequest union, so it fails validation like any unknown type.
+    resp = client.post("/tasks", json={"type": "bundle", "file_url": "uploads/u1/m.json"})
+    assert resp.status_code == 422
+    assert fake_db.jobs.inserted is None
+    assert fake_queue.messages == []
+
+
+def test_list_tasks_hides_bundles(client, fake_db):
+    fake_db.jobs.rows = [dict(NORMAL_ROW), dict(BUNDLE_ROW)]
+    tasks = client.get("/tasks").json()["tasks"]
+    assert [t["id"] for t in tasks] == ["j1"]
+
+
+@pytest.mark.parametrize("path", ["/tasks/b1", "/tasks/b1/files", "/tasks/b1/result"])
+def test_task_endpoints_404_for_bundles(client, fake_db, path):
+    fake_db.jobs.rows = [dict(BUNDLE_ROW)]
+    assert client.get(path).status_code == 404
+
+
+def test_delete_task_404_for_bundle_and_keeps_its_files(client, fake_db, monkeypatch):
+    deleted = []
+    monkeypatch.setattr(tasks_module.s3, "delete_object", deleted.append)
+    fake_db.jobs.rows = [dict(BUNDLE_ROW)]
+
+    assert client.delete("/tasks/b1").status_code == 404
+    assert deleted == []
+    assert fake_db.jobs.rows == [BUNDLE_ROW]
 
 
 def test_tasks_requires_auth():

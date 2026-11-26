@@ -8,7 +8,10 @@ from .jobs import (
     TranscribeJob,
     JobRequest,
     DeblurJob,
+    BundleJob,
+    WorkerJob,
     job_adapter,
+    worker_job_adapter,
     VIDEO_FORMATS,
 )
 
@@ -23,5 +26,8 @@ __all__ = [
     "ImageResizeJob",
     "FormatConverterJob",
     "TranscribeJob",
+    "BundleJob",
+    "WorkerJob",
+    "worker_job_adapter",
     "VIDEO_FORMATS",
 ]

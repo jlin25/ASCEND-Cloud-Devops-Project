@@ -4,15 +4,23 @@ the visibility heartbeat.
 The S3 client and ffmpeg are mocked so no bytes leave the box: we assert on
 the ffmpeg arguments that *would* run and the S3 upload target.
 """
+import io
+import json
 import subprocess as sp
 import time
+import zipfile
 
 import cv2
 import numpy as np
 import pytest
+from botocore.exceptions import ClientError
+from pydantic import ValidationError
 
 import worker
 from jobs import (
+    BundleJob,
+    job_adapter,
+    worker_job_adapter,
     DeblurJob,
     ExtractAudioJob,
     FormatConverterJob,
@@ -237,6 +245,134 @@ def test_handle_rejects_unimplemented_job_types():
         worker.handle(job, "u1")
 
 
+# --- process_bundle (ZIP of results) -----------------------------------------
+UUID1 = "0b4a9f3e-1c2d-4e5f-8a9b-0c1d2e3f4a5b"
+UUID2 = "9f8e7d6c-5b4a-4321-8fed-cba987654321"
+
+
+class BytesBody:
+    """StreamingBody stand-in that serves real bytes, in two chunks."""
+
+    def __init__(self, data: bytes):
+        self.data = data
+
+    def read(self):
+        return self.data
+
+    def iter_chunks(self):
+        half = len(self.data) // 2
+        yield self.data[:half]
+        yield self.data[half:]
+
+
+@pytest.fixture
+def bundle_s3(monkeypatch):
+    """Fake S3 holding `objects`; returns (objects, uploads)."""
+    objects: dict[str, bytes] = {}
+    uploads: dict[str, dict] = {}
+
+    def download_stream(key):
+        if key not in objects:
+            raise ClientError({"Error": {"Code": "NoSuchKey", "Message": "gone"}}, "GetObject")
+        return BytesBody(objects[key])
+
+    def upload_stream(user_id, filename, fileobj, content_type, prefix="uploads"):
+        key = f"{prefix}/{user_id}/{filename}"
+        uploads[key] = {"data": fileobj.read(), "content_type": content_type}
+        return key
+
+    monkeypatch.setattr(worker.s3, "download_stream", download_stream)
+    monkeypatch.setattr(worker.s3, "upload_stream", upload_stream)
+    return objects, uploads
+
+
+def run_bundle(objects, files, user="u1"):
+    objects["bundles/u1/m.json"] = json.dumps({"files": files}).encode()
+    return worker.process_bundle(BundleJob(type="bundle", file_url="bundles/u1/m.json"), user)
+
+
+def zip_contents(uploads, key):
+    with zipfile.ZipFile(io.BytesIO(uploads[key]["data"])) as zf:
+        return {name: zf.read(name) for name in zf.namelist()}
+
+
+def test_process_bundle_zips_results_under_their_original_names(bundle_s3):
+    objects, uploads = bundle_s3
+    objects[f"processed/u1/{UUID2}-{UUID1}-beach.jpg"] = b"beach-bytes"
+    objects[f"processed/u1/{UUID1}-song.mp3"] = b"song-bytes"
+
+    out = run_bundle(objects, list(k for k in objects if k.startswith("processed/")))
+
+    assert out == "bundles/u1/results-2-files.zip"
+    assert uploads[out]["content_type"] == "application/zip"
+    assert zip_contents(uploads, out) == {"beach.jpg": b"beach-bytes", "song.mp3": b"song-bytes"}
+
+
+def test_process_bundle_dedupes_same_names(bundle_s3):
+    objects, uploads = bundle_s3
+    for i, u in enumerate([UUID1, UUID2, "11111111-2222-4333-8444-555555555555"]):
+        objects[f"processed/u1/{u}-photo.jpg"] = f"v{i}".encode()
+
+    out = run_bundle(objects, [k for k in objects if k.startswith("processed/")])
+    assert sorted(zip_contents(uploads, out)) == ["photo (2).jpg", "photo (3).jpg", "photo.jpg"]
+
+
+def test_process_bundle_ignores_keys_outside_the_users_results(bundle_s3):
+    objects, uploads = bundle_s3
+    objects["processed/u1/mine.png"] = b"mine"
+    objects["processed/u2/theirs.png"] = b"theirs"
+    objects["uploads/u1/original.png"] = b"original"
+    objects["processed/u1x/lookalike.png"] = b"lookalike"
+
+    out = run_bundle(
+        objects,
+        ["processed/u1/mine.png", "processed/u2/theirs.png", "uploads/u1/original.png", "processed/u1x/lookalike.png"],
+    )
+    assert out == "bundles/u1/results-1-files.zip"
+    assert zip_contents(uploads, out) == {"mine.png": b"mine"}
+
+
+def test_process_bundle_skips_results_deleted_since(bundle_s3):
+    objects, uploads = bundle_s3
+    objects["processed/u1/kept.png"] = b"kept"
+
+    out = run_bundle(objects, ["processed/u1/kept.png", "processed/u1/deleted.png"])
+    assert zip_contents(uploads, out) == {"kept.png": b"kept"}
+
+
+def test_process_bundle_fails_when_nothing_is_left(bundle_s3):
+    objects, uploads = bundle_s3
+    with pytest.raises(ValueError):
+        run_bundle(objects, ["processed/u1/deleted.png", "processed/u2/theirs.png"])
+    assert uploads == {}
+
+
+def test_process_bundle_reports_progress_per_file(bundle_s3, monkeypatch):
+    objects, _ = bundle_s3
+    reported = []
+    monkeypatch.setattr(worker, "report_progress", reported.append)
+    for name in ["a", "b", "c", "d"]:
+        objects[f"processed/u1/{name}.png"] = b"x"
+
+    run_bundle(objects, [f"processed/u1/{n}.png" for n in "abcd"])
+    assert reported == [25, 50, 75, 100]
+
+
+def test_handle_dispatches_bundle(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(worker, "process_bundle", lambda job, user_id: seen.setdefault("args", (job, user_id)) and "k")
+    job = BundleJob(type="bundle", file_url="bundles/u1/m.json")
+    assert worker.handle(job, "u1") == "k"
+    assert seen["args"] == (job, "u1")
+
+
+def test_worker_parses_bundle_messages_but_api_schema_does_not():
+    msg = {"job_id": "b1", "user_id": "u1", "type": "bundle", "file_url": "bundles/u1/m.json"}
+    assert isinstance(worker_job_adapter.validate_python(msg), BundleJob)
+    with pytest.raises(ValidationError):
+        job_adapter.validate_python(msg)
+
+
 # --- run_ffmpeg -------------------------------------------------------------
 class FakePopen:
     """Stand-in for subprocess.Popen emitting ffmpeg `-progress` output."""
@@ -409,6 +545,24 @@ def test_trim_duration_stops_at_end_of_video(captured):
     job = TrimJob(type="trim", file_url="uploads/u1/a.mp4", start_seconds=4, end_seconds=60)
     worker.process_trim(job, "u1")
     assert captured["duration"] == 6
+
+
+@pytest.mark.parametrize(
+    "src,inp,out,expected,content_type",
+    [
+        ("uploads/u1/photo.jpg", "jpg", "png", "photo.png", "image/png"),
+        ("uploads/u1/pic.webp", "webp", "png", "pic.png", "image/png"),
+        ("uploads/u1/clip.mov", "mov", "mp4", "clip.mp4", "video/mp4"),
+    ],
+)
+def test_convert_format_names_output_after_new_format(captured, src, inp, out, expected, content_type):
+    job = FormatConverterJob(type="format_converter", file_url=src, input_format=inp, output_format=out)
+    key = worker.convert_format(job, "u1")
+
+    # The output takes the new format's extension, not the original's.
+    assert captured["upload"]["filename"] == expected
+    assert captured["upload"]["content_type"] == content_type
+    assert key == f"processed/u1/{expected}"
 
 
 def test_video_format_conversion_passes_duration(captured):
