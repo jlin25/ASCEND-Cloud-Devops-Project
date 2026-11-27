@@ -16,6 +16,9 @@ s3 = S3Client()
 # in the schema but would only fail in the worker, so reject them up front.
 SUPPORTED_JOB_TYPES = {"trim", "video_quality", "image_resize", "deblur", "format_converter", "extract_audio"}
 
+# Internal ZIP jobs share the jobs table but are not a user job
+INTERNAL_JOB_TYPE = "bundle"
+
 @router.post("/tasks")
 async def create_task(job: JobRequest, current_user: User = Depends(get_current_user)):
     user_id = current_user.id
@@ -51,13 +54,26 @@ async def upload_file(file: UploadFile = File(...), current_user: User = Depends
 
 @router.get("/tasks")
 async def get_all_tasks(current_user : User = Depends(get_current_user)):
-    response = database.table("jobs").select("*").eq("user_id", current_user.id).execute()
+    response = (
+        database.table("jobs")
+        .select("*")
+        .eq("user_id", current_user.id)
+        .neq("job_type", INTERNAL_JOB_TYPE)
+        .execute()
+    )
     return {"tasks": response.data}
 
 
 @router.get("/tasks/{task_id}")
 async def get_task(task_id: str, current_user : User = Depends(get_current_user)):
-    response = database.table("jobs").select("*").eq("id", task_id).eq("user_id", current_user.id).execute()
+    response = (
+        database.table("jobs")
+        .select("*")
+        .eq("id", task_id)
+        .eq("user_id", current_user.id)
+        .neq("job_type", INTERNAL_JOB_TYPE)
+        .execute()
+    )
     if not response.data:
         raise HTTPException(status_code=404, detail="Task not found")
     else:
@@ -71,6 +87,7 @@ async def get_task_result(task_id: str, current_user : User = Depends(get_curren
         .select("output_key")
         .eq("id", task_id)
         .eq("user_id", current_user.id)
+        .neq("job_type", INTERNAL_JOB_TYPE)
         .eq("progress", 100)
         .execute()
     )
@@ -90,6 +107,7 @@ async def get_task_files(task_id: str, current_user : User = Depends(get_current
         .select("input_key, output_key, status")
         .eq("id", task_id)
         .eq("user_id", current_user.id)
+        .neq("job_type", INTERNAL_JOB_TYPE)
         .execute()
     )
     if not response.data:
@@ -104,7 +122,14 @@ async def get_task_files(task_id: str, current_user : User = Depends(get_current
 
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, current_user : User = Depends(get_current_user)):
-    response = database.table("jobs").delete().eq("id", task_id).eq("user_id", current_user.id).execute()
+    response = (
+        database.table("jobs")
+        .delete()
+        .eq("id", task_id)
+        .eq("user_id", current_user.id)
+        .neq("job_type", INTERNAL_JOB_TYPE)
+        .execute()
+    )
     if not response.data:
         raise HTTPException(status_code=404, detail="Task not found")
     else:

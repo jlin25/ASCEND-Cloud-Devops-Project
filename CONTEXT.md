@@ -70,6 +70,9 @@ React/Vite frontend  ──HTTP──▶  FastAPI backend  ──insert──▶
     attaches `Bearer` token from `localStorage`.
   - `src/api-types.ts` — types generated from the backend OpenAPI schema
     (`npm run gen:api`, backend must be running).
+- **Folder upload:** pick one file or a whole folder. For a folder, `planFiles()`
+  (`src/jobs.ts`) skips files that don't fit the job, each file becomes its own job,
+  and `src/RunSummary.tsx` shows the run and offers "Download all as ZIP".
 - **Integration status:** every task offered in the UI works end-to-end. The UI
   deliberately exposes only 3 of the 5 implemented job types — see *Next steps*.
 - **No route guards:** `/dashboard`, `/jobs`, `/marketplace` render for signed-out
@@ -88,6 +91,8 @@ React/Vite frontend  ──HTTP──▶  FastAPI backend  ──insert──▶
   - `GET /tasks/{id}` — fetch one job.
   - `GET /tasks/{id}/result` — presigned output URL (404 until job done).
   - `DELETE /tasks/{id}` — delete a job.
+  - `POST /bundles`, `GET /bundles/{id}`, `DELETE /bundles/{id}` — ZIP of the caller's
+    finished results (`routers/bundles.py`). `/tasks` routes hide these `bundle` rows.
   - `POST /auth/register|login|logout` — **implemented** (JWT). All `/tasks` and
     `/upload` routes require a `Bearer` token (`get_current_user`).
 - **Auth signing:** JWTs are signed with the `SECRET_KEY` env var (self-generated).
@@ -111,6 +116,7 @@ React/Vite frontend  ──HTTP──▶  FastAPI backend  ──insert──▶
   - `transcribe`: `file_url` — ⚠️ schema and IAM permissions only. **No worker
     handler**, so it falls through to `assert_never` and the message is redelivered
     until it lands in the DLQ. Do not expose in the UI.
+  - `bundle`: internal ZIP job, not in `JobRequest`, so users can't create it.
 - **S3** (`s3_client.py`, `S3Client`): `upload_stream` / `download_stream` /
   `get_output_url` (24h presigned) / `delete_object`. `file_url` values are S3 keys.
 - **Worker** (`worker.py`): polls SQS, sets `processing` → `done` (with

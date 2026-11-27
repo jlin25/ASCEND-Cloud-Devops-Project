@@ -650,3 +650,103 @@ button:disabled {
   background: rgb(220 38 38 / 15%);
   color: var(--danger);
 }
+
+/* Folder upload */
+/* Two pickers side by side */
+.pickers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .pickers {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Folder run summary  */
+.run {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.run-title {
+  margin: 0;
+  font-size: 15px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.close-button {
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.run-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.run-files summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+
+
+.run-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.run-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.run-file,
+.run-skip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.run-file {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.run-file:hover {
+  background: var(--bg);
+}
+
+.run-file .side-name,
+.run-skip .side-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.run-actions {
+  margin-top: 4px;
+}
+
+.run-zip {
+  flex: 1;
+}
